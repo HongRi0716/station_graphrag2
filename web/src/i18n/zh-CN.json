@@ -235,12 +235,12 @@
     "update_collection": "更新知识库",
     "delete_collection": "删除知识库",
     "delete_collection_confirm": "此操作不可撤销。系统将永久删除该知识库，并从我们的服务器中移除所有相关文档。",
-    "publish_collection": "发布至市场",
+    "publish_collection": "发布至public collection",
     "publish_collection_description": "允许用户发现并订阅您的知识库",
-    "unpublish_collection": "从市场下架",
-    "unpublish_collection_description": "将此知识库从市场中移除，转为私有状态",
-    "published_success": "已发布到市场",
-    "unpublished_success": "已从市场下架",
+    "unpublish_collection": "从public collection下架",
+    "unpublish_collection_description": "将此知识库从public collection中移除，转为私有状态",
+    "published_success": "已发布到public collection",
+    "unpublished_success": "已从public collection下架",
     "name": "名称",
     "name_placeholder": "知识库显示名称",
     "description": "描述",
@@ -273,7 +273,14 @@
     "embedding_model": "嵌入模型（Embedding Model）",
     "embedding_model_description": "嵌入模型能够将数据转换为数值向量，这些向量能够捕捉数据的语义信息及其相互关系。",
     "completion_model": "补全模型（Completion Model）",
-    "completion_model_description": "补全模型能根据给定输入预测最可能的下文内容，从而生成新的文本。"
+    "completion_model_description": "补全模型能根据给定输入预测最可能的下文内容，从而生成新的文本。",
+    "copy_documents": "从已有知识库复制文档",
+    "copy_documents_description": "选择已有的知识库，将其中的文档复制到新建的知识库中。同名文档将自动去重。",
+    "source_collections": "源知识库",
+    "source_collections_description": "选择一个或多个知识库。文档将被复制，并按名称自动去重。",
+    "select_collections": "选择知识库...",
+    "search_collections": "搜索知识库...",
+    "collections_selected": "个知识库已选择"
   },
   "page_docs": {
     "metadata": {
@@ -365,7 +372,7 @@
   },
   "page_marketplace": {
     "metadata": {
-      "title": "市场",
+      "title": "public collection",
       "description": "探索并订阅社区分享的优质知识合集，拓展你的知识边界。"
     },
     "no_collections_found": "未找到相关知识库",
@@ -509,7 +516,7 @@
   },
   "sidebar_workspace": {
     "repositories": "知识库",
-    "marketplace": "市场",
+    "marketplace": "public collection",
     "collections": "我的知识库",
     "bots": "机器人",
     "chats": "会话",

@@ -111,6 +111,30 @@ class CollectionService:
         document_user_quota = await self.db_ops.query_user_quota(user, QuotaType.MAX_DOCUMENT_COUNT)
         collection_init_task.delay(instance.id, document_user_quota)
 
+        # Copy documents from source collections if specified
+        if collection.source_collection_ids and len(collection.source_collection_ids) > 0:
+            logger.info(
+                f"Copying documents from {len(collection.source_collection_ids)} source collections to {instance.id}"
+            )
+            try:
+                from aperag.service.document_service import document_service
+                
+                # Copy documents asynchronously after collection is created
+                # This runs in the background and doesn't block the collection creation response
+                copy_result = await document_service.copy_documents_from_collections(
+                    user_id=user,
+                    target_collection_id=instance.id,
+                    source_collection_ids=collection.source_collection_ids,
+                    deduplicate=True  # Always deduplicate by document name
+                )
+                logger.info(f"Document copy result for collection {instance.id}: {copy_result}")
+            except Exception as e:
+                # Log error but don't fail collection creation
+                logger.error(
+                    f"Failed to copy documents to collection {instance.id}: {e}",
+                    exc_info=True
+                )
+
         return await self.build_collection_response(instance)
 
     async def list_collections_view(

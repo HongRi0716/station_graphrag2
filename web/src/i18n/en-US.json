@@ -273,7 +273,14 @@
     "embedding_model": "Embedding Model",
     "embedding_model_description": "An embedding model translates data into numerical vectors that capture their semantic meaning and relationships.",
     "completion_model": "Completion Model",
-    "completion_model_description": "A completion model is an AI that generates new content by predicting the most likely subsequent text based on a given input."
+    "completion_model_description": "A completion model is an AI that generates new content by predicting the most likely subsequent text based on a given input.",
+    "copy_documents": "Copy Documents from Existing Collections",
+    "copy_documents_description": "Select existing collections to copy their documents into this new collection. Documents with duplicate names will be automatically skipped.",
+    "source_collections": "Source Collections",
+    "source_collections_description": "Choose one or more collections. Documents will be copied with automatic deduplication by name.",
+    "select_collections": "Select collections...",
+    "search_collections": "Search collections...",
+    "collections_selected": "collections selected"
   },
   "page_docs": {
     "metadata": {

@@ -71,9 +71,11 @@ def _trigger_index_reconciliation():
 
         # Trigger the reconciliation task asynchronously
         reconcile_indexes_task.delay()
-        logger.debug("Index reconciliation task triggered for real-time processing")
+        logger.debug(
+            "Index reconciliation task triggered for real-time processing")
     except ImportError:
-        logger.warning("Celery not available, skipping index reconciliation trigger")
+        logger.warning(
+            "Celery not available, skipping index reconciliation trigger")
     except Exception as e:
         logger.warning(f"Failed to trigger index reconciliation task: {e}")
 
@@ -86,7 +88,8 @@ class DocumentService:
         if session is None:
             self.db_ops = async_db_ops  # Use global instance
         else:
-            self.db_ops = AsyncDatabaseOps(session)  # Create custom instance for transaction control
+            # Create custom instance for transaction control
+            self.db_ops = AsyncDatabaseOps(session)
 
     async def _validate_collection(self, user: str, collection_id: str) -> db_models.Collection:
         """
@@ -110,7 +113,8 @@ class DocumentService:
 
         file_suffix = os.path.splitext(filename)[1].lower()
         if file_suffix not in supported_file_extensions:
-            raise invalid_param("file_type", f"unsupported file type {file_suffix}")
+            raise invalid_param(
+                "file_type", f"unsupported file type {file_suffix}")
         if size > settings.max_document_size:
             raise invalid_param("file_size", "file size is too large")
 
@@ -132,7 +136,8 @@ class DocumentService:
             # If existing document has no hash (legacy document), skip hash check
             if existing_doc.content_hash is None:
                 # Could calculate hash for legacy document here if needed
-                logger.warning(f"Existing document {existing_doc.id} has no file hash, skipping hash comparison")
+                logger.warning(
+                    f"Existing document {existing_doc.id} has no file hash, skipping hash comparison")
                 return existing_doc
 
             # If file hashes match, it's a true duplicate (same file)
@@ -163,7 +168,8 @@ class DocumentService:
             .where(
                 db_models.Document.collection_id == collection_id,
                 db_models.Document.status != db_models.DocumentStatus.DELETED,
-                db_models.Document.status != db_models.DocumentStatus.UPLOADED,  # Don't count temporary uploads
+                # Don't count temporary uploads
+                db_models.Document.status != db_models.DocumentStatus.UPLOADED,
             )
         )
         existing_doc_count = await session.scalar(stmt)
@@ -171,7 +177,8 @@ class DocumentService:
         # Get per-collection quota limit
         from aperag.db.models import UserQuota
 
-        stmt = select(UserQuota).where(UserQuota.user == user, UserQuota.key == "max_document_count_per_collection")
+        stmt = select(UserQuota).where(UserQuota.user == user,
+                                       UserQuota.key == "max_document_count_per_collection")
         result = await session.execute(stmt)
         per_collection_quota = result.scalars().first()
 
@@ -267,9 +274,12 @@ class DocumentService:
                     db_models.DocumentIndex.index_type,
                     db_models.DocumentIndex.index_data,
                     db_models.DocumentIndex.status.label("index_status"),
-                    db_models.DocumentIndex.gmt_created.label("index_created_at"),
-                    db_models.DocumentIndex.gmt_updated.label("index_updated_at"),
-                    db_models.DocumentIndex.error_message.label("index_error_message"),
+                    db_models.DocumentIndex.gmt_created.label(
+                        "index_created_at"),
+                    db_models.DocumentIndex.gmt_updated.label(
+                        "index_updated_at"),
+                    db_models.DocumentIndex.error_message.label(
+                        "index_error_message"),
                 )
                 .select_from(
                     outerjoin(
@@ -306,7 +316,8 @@ class DocumentService:
                 if doc.id not in documents_dict:
                     documents_dict[doc.id] = doc
                     # Initialize index information for all types
-                    doc.indexes = {"VECTOR": None, "FULLTEXT": None, "GRAPH": None, "SUMMARY": None, "VISION": None}
+                    doc.indexes = {"VECTOR": None, "FULLTEXT": None,
+                                   "GRAPH": None, "SUMMARY": None, "VISION": None}
 
                 # Add index information if exists
                 if row.index_type:
@@ -329,7 +340,8 @@ class DocumentService:
         """
         # Get all index information if available
         indexes = getattr(
-            document, "indexes", {"VECTOR": None, "FULLTEXT": None, "GRAPH": None, "SUMMARY": None, "VISION": None}
+            document, "indexes", {"VECTOR": None, "FULLTEXT": None,
+                                  "GRAPH": None, "SUMMARY": None, "VISION": None}
         )
 
         # Parse summary from SUMMARY index's index_data
@@ -337,7 +349,8 @@ class DocumentService:
         summary_index = indexes.get("SUMMARY")
         if summary_index and summary_index.get("index_data"):
             try:
-                index_data = json.loads(summary_index["index_data"]) if summary_index["index_data"] else None
+                index_data = json.loads(
+                    summary_index["index_data"]) if summary_index["index_data"] else None
                 if index_data:
                     summary = index_data.get("summary")
             except Exception:
@@ -357,10 +370,14 @@ class DocumentService:
             graph_index_status=indexes["GRAPH"]["status"] if indexes["GRAPH"] else "SKIPPED",
             graph_index_updated=indexes["GRAPH"]["updated_at"] if indexes["GRAPH"] else None,
             # Summary index information
-            summary_index_status=indexes["SUMMARY"]["status"] if indexes.get("SUMMARY") else "SKIPPED",
-            summary_index_updated=indexes["SUMMARY"]["updated_at"] if indexes.get("SUMMARY") else None,
-            vision_index_status=indexes["VISION"]["status"] if indexes.get("VISION") else "SKIPPED",
-            vision_index_updated=indexes["VISION"]["updated_at"] if indexes.get("VISION") else None,
+            summary_index_status=indexes["SUMMARY"]["status"] if indexes.get(
+                "SUMMARY") else "SKIPPED",
+            summary_index_updated=indexes["SUMMARY"]["updated_at"] if indexes.get(
+                "SUMMARY") else None,
+            vision_index_status=indexes["VISION"]["status"] if indexes.get(
+                "VISION") else "SKIPPED",
+            vision_index_updated=indexes["VISION"]["updated_at"] if indexes.get(
+                "VISION") else None,
             summary=summary,  # Parse from index_data
             size=document.size,
             created=document.gmt_created,
@@ -376,7 +393,8 @@ class DocumentService:
         ignore_duplicate: bool = False,
     ) -> view_models.DocumentList:
         if len(files) > 50:
-            raise invalid_param("file_count", "documents are too many, add document failed")
+            raise invalid_param(
+                "file_count", "documents are too many, add document failed")
 
         # Validate collection
         collection = await self._validate_collection(user, collection_id)
@@ -411,7 +429,8 @@ class DocumentService:
 
             documents_created = []
             collection_config = json.loads(collection.config)
-            index_types = self._get_index_types_for_collection(collection_config)
+            index_types = self._get_index_types_for_collection(
+                collection_config)
 
             for file_info in file_data:
                 # Check for duplicate document (same name and hash)
@@ -504,13 +523,16 @@ class DocumentService:
             # Apply search filter
             if search:
                 search_term = f"%{search}%"
-                base_query = base_query.where(db_models.Document.name.ilike(search_term))
+                base_query = base_query.where(
+                    db_models.Document.name.ilike(search_term))
 
             # Build query parameters for documents
             params = ListParams(
                 pagination=PaginationParams(page=page, page_size=page_size),
-                sort=SortParams(sort_by=sort_by, sort_order=sort_order) if sort_by else None,
-                search=SearchParams(search=search, search_fields=["name"]) if search else None,
+                sort=SortParams(sort_by=sort_by,
+                                sort_order=sort_order) if sort_by else None,
+                search=SearchParams(search=search, search_fields=[
+                                    "name"]) if search else None,
             )
 
             # Use pagination helper for documents
@@ -551,7 +573,8 @@ class DocumentService:
                 # Attach index information to documents
                 for doc in documents:
                     # Initialize index information for all types
-                    doc.indexes = {"VECTOR": None, "FULLTEXT": None, "GRAPH": None, "SUMMARY": None, "VISION": None}
+                    doc.indexes = {"VECTOR": None, "FULLTEXT": None,
+                                   "GRAPH": None, "SUMMARY": None, "VISION": None}
 
                     # Add actual index data if exists
                     if doc.id in indexes_by_doc:
@@ -577,7 +600,8 @@ class DocumentService:
         documents = await self._query_documents_with_indexes(user, collection_id, document_id)
 
         if not documents:
-            raise DocumentNotFoundException(f"Document not found: {document_id}")
+            raise DocumentNotFoundException(
+                f"Document not found: {document_id}")
 
         document = documents[0]
         return await self._build_document_response(document)
@@ -591,7 +615,8 @@ class DocumentService:
         document = await self.db_ops.query_document(user, collection_id, document_id)
         if document is None:
             # Silently ignore if document not found, as it might have been deleted by another process
-            logger.warning(f"Document {document_id} not found for deletion, skipping.")
+            logger.warning(
+                f"Document {document_id} not found for deletion, skipping.")
             return
 
         # Use index manager to mark all related indexes for deletion
@@ -599,14 +624,17 @@ class DocumentService:
 
         # Delete from object store
         async_obj_store = get_async_object_store()
-        metadata = json.loads(document.doc_metadata) if document.doc_metadata else {}
+        metadata = json.loads(
+            document.doc_metadata) if document.doc_metadata else {}
         if metadata.get("object_path"):
             try:
                 # Use delete_objects_by_prefix to remove all related files (original, chunks, etc.)
                 await async_obj_store.delete_objects_by_prefix(document.object_store_base_path())
-                logger.info(f"Deleted objects from object store with prefix: {document.object_store_base_path()}")
+                logger.info(
+                    f"Deleted objects from object store with prefix: {document.object_store_base_path()}")
             except Exception as e:
-                logger.warning(f"Failed to delete objects for document {document.id} from object store: {e}")
+                logger.warning(
+                    f"Failed to delete objects for document {document.id} from object store: {e}")
 
         # Mark document as deleted
         document.status = db_models.DocumentStatus.DELETED
@@ -665,9 +693,11 @@ class DocumentService:
             dict: Success response
         """
         if len(set(index_types)) != len(index_types):
-            raise invalid_param("index_types", "duplicate index types are not allowed")
+            raise invalid_param(
+                "index_types", "duplicate index types are not allowed")
 
-        logger.info(f"Rebuilding indexes for document {document_id} with types: {index_types}")
+        logger.info(
+            f"Rebuilding indexes for document {document_id} with types: {index_types}")
 
         from aperag.db.models import DocumentIndexType
 
@@ -684,24 +714,29 @@ class DocumentService:
             elif index_type == "VISION":
                 index_type_enums.append(DocumentIndexType.VISION)
             else:
-                raise invalid_param("index_type", f"Invalid index type: {index_type}")
+                raise invalid_param(
+                    "index_type", f"Invalid index type: {index_type}")
 
         async def _rebuild_document_indexes_atomically(session):
             document = await self.db_ops.query_document(user_id, collection_id, document_id)
             if not document:
-                raise DocumentNotFoundException(f"Document {document_id} not found")
+                raise DocumentNotFoundException(
+                    f"Document {document_id} not found")
             if document.collection_id != collection_id:
-                raise ResourceNotFoundException(f"Document {document_id} not found in collection {collection_id}")
+                raise ResourceNotFoundException(
+                    f"Document {document_id} not found in collection {collection_id}")
             collection = await self.db_ops.query_collection(user_id, collection_id)
             if not collection or collection.user != user_id:
-                raise ResourceNotFoundException(f"Collection {collection_id} not found or access denied")
+                raise ResourceNotFoundException(
+                    f"Collection {collection_id} not found or access denied")
             collection_config = json.loads(collection.config)
             if not collection_config.get("enable_knowledge_graph", False):
                 if db_models.DocumentIndexType.GRAPH in index_type_enums:
                     index_type_enums.remove(db_models.DocumentIndexType.GRAPH)
             # 支持 SUMMARY 类型的重建
             await document_index_manager.create_or_update_document_indexes(session, document_id, index_type_enums)
-            logger.info(f"Successfully triggered rebuild for document {document_id} indexes: {index_types}")
+            logger.info(
+                f"Successfully triggered rebuild for document {document_id} indexes: {index_types}")
             return {"code": "200", "message": f"Index rebuild initiated for types: {', '.join(index_types)}"}
 
         result = await self.db_ops.execute_with_transaction(_rebuild_document_indexes_atomically)
@@ -717,7 +752,8 @@ class DocumentService:
         Returns:
             dict: Success response with affected documents count
         """
-        logger.info(f"Rebuilding failed indexes for collection {collection_id}")
+        logger.info(
+            f"Rebuilding failed indexes for collection {collection_id}")
 
         from aperag.db.models import DocumentIndexType
 
@@ -725,11 +761,13 @@ class DocumentService:
             # First verify collection access
             collection = await self.db_ops.query_collection(user_id, collection_id)
             if not collection or collection.user != user_id:
-                raise ResourceNotFoundException(f"Collection {collection_id} not found or access denied")
+                raise ResourceNotFoundException(
+                    f"Collection {collection_id} not found or access denied")
 
             # Get collection config to check graph indexing
             collection_config = json.loads(collection.config)
-            enable_knowledge_graph = collection_config.get("enable_knowledge_graph", False)
+            enable_knowledge_graph = collection_config.get(
+                "enable_knowledge_graph", False)
 
             # Query documents with failed indexes (no type filter)
             failed_docs = await self.db_ops.query_documents_with_failed_indexes(user_id, collection_id, None)
@@ -743,12 +781,14 @@ class DocumentService:
                 # Filter out GRAPH type if not enabled in collection config
                 rebuild_types = failed_index_types
                 if not enable_knowledge_graph:
-                    rebuild_types = [t for t in failed_index_types if t != DocumentIndexType.GRAPH]
+                    rebuild_types = [
+                        t for t in failed_index_types if t != DocumentIndexType.GRAPH]
 
                 if rebuild_types:
                     await document_index_manager.create_or_update_document_indexes(session, document_id, rebuild_types)
                     affected_documents += 1
-                    logger.info(f"Triggered rebuild for document {document_id} indexes: {[t for t in rebuild_types]}")
+                    logger.info(
+                        f"Triggered rebuild for document {document_id} indexes: {[t for t in rebuild_types]}")
 
             return {
                 "code": "200",
@@ -789,10 +829,12 @@ class DocumentService:
 
             # 2. Retrieve chunks from Qdrant
             try:
-                collection_name = generate_vector_db_collection_name(collection_id=collection_id)
+                collection_name = generate_vector_db_collection_name(
+                    collection_id=collection_id)
                 ctx = json.loads(settings.vector_db_context)
                 ctx["collection"] = collection_name
-                vector_store_adaptor = VectorStoreConnectorAdaptor(settings.vector_db_type, ctx=ctx)
+                vector_store_adaptor = VectorStoreConnectorAdaptor(
+                    settings.vector_db_type, ctx=ctx)
                 qdrant_client = vector_store_adaptor.connector.client
 
                 points = qdrant_client.retrieve(
@@ -814,11 +856,13 @@ class DocumentService:
                                     Chunk(
                                         id=point.id,
                                         text=payload_data.get("text", ""),
-                                        metadata=payload_data.get("metadata", {}),
+                                        metadata=payload_data.get(
+                                            "metadata", {}),
                                     )
                                 )
                             except json.JSONDecodeError:
-                                logger.warning(f"Could not parse _node_content for point {point.id}")
+                                logger.warning(
+                                    f"Could not parse _node_content for point {point.id}")
                         else:
                             # Fallback for older or different data structures
                             chunks.append(
@@ -834,7 +878,8 @@ class DocumentService:
                 logger.error(
                     f"Failed to retrieve chunks from vector store for document {document_id}: {e}", exc_info=True
                 )
-                raise HTTPException(status_code=500, detail="Failed to retrieve chunks from vector store")
+                raise HTTPException(
+                    status_code=500, detail="Failed to retrieve chunks from vector store")
 
         # Execute query with proper session management
         return await self.db_ops._execute_query(_get_document_chunks)
@@ -867,10 +912,12 @@ class DocumentService:
 
             # 2. Retrieve chunks from Qdrant
             try:
-                collection_name = generate_vector_db_collection_name(collection_id=collection_id)
+                collection_name = generate_vector_db_collection_name(
+                    collection_id=collection_id)
                 ctx = json.loads(settings.vector_db_context)
                 ctx["collection"] = collection_name
-                vector_store_adaptor = VectorStoreConnectorAdaptor(settings.vector_db_type, ctx=ctx)
+                vector_store_adaptor = VectorStoreConnectorAdaptor(
+                    settings.vector_db_type, ctx=ctx)
                 qdrant_client = vector_store_adaptor.connector.client
 
                 points = qdrant_client.retrieve(
@@ -899,7 +946,8 @@ class DocumentService:
                                         )
                                     )
                             except json.JSONDecodeError:
-                                logger.warning(f"Could not parse _node_content for point {point.id}")
+                                logger.warning(
+                                    f"Could not parse _node_content for point {point.id}")
                         else:
                             # Fallback for older or different data structures
                             metadata = point.payload.get("metadata", {})
@@ -917,7 +965,8 @@ class DocumentService:
                 logger.error(
                     f"Failed to retrieve vision chunks from vector store for document {document_id}: {e}", exc_info=True
                 )
-                raise HTTPException(status_code=500, detail="Failed to retrieve vision chunks from vector store")
+                raise HTTPException(
+                    status_code=500, detail="Failed to retrieve vision chunks from vector store")
 
         return await self.db_ops._execute_query(_get_document_vision_chunks)
 
@@ -960,10 +1009,12 @@ class DocumentService:
                         content += data
                     markdown_content = content.decode("utf-8")
             except Exception:
-                logger.warning(f"Could not find or read markdown file at {markdown_path}")
+                logger.warning(
+                    f"Could not find or read markdown file at {markdown_path}")
 
             # 4. Determine paths
-            doc_metadata = json.loads(document.doc_metadata) if document.doc_metadata else {}
+            doc_metadata = json.loads(
+                document.doc_metadata) if document.doc_metadata else {}
             doc_object_path = doc_metadata.get("object_path")
             if doc_object_path:
                 doc_object_path = os.path.basename(doc_object_path)
@@ -1013,7 +1064,8 @@ class DocumentService:
             # Construct the full path and perform security check
             full_path = os.path.join(document.object_store_base_path(), path)
             if not full_path.startswith(document.object_store_base_path()):
-                raise HTTPException(status_code=403, detail="Access denied to this object path")
+                raise HTTPException(
+                    status_code=403, detail="Access denied to this object path")
 
             # 2. Get the object from object store
             try:
@@ -1028,24 +1080,29 @@ class DocumentService:
                     # For range requests, we need the total size first.
                     total_size = await async_obj_store.get_obj_size(full_path)
                     if total_size is None:
-                        raise HTTPException(status_code=404, detail="Object not found at specified path")
+                        raise HTTPException(
+                            status_code=404, detail="Object not found at specified path")
 
                     range_match = re.match(r"bytes=(\d+)-(\d*)", range_header)
                     if not range_match:
-                        raise HTTPException(status_code=400, detail="Invalid range header format")
+                        raise HTTPException(
+                            status_code=400, detail="Invalid range header format")
 
                     start_byte = int(range_match.group(1))
                     end_byte_str = range_match.group(2)
-                    end_byte = int(end_byte_str) if end_byte_str else total_size - 1
+                    end_byte = int(
+                        end_byte_str) if end_byte_str else total_size - 1
 
                     if start_byte >= total_size or end_byte >= total_size or start_byte > end_byte:
                         headers["Content-Range"] = f"bytes */{total_size}"
-                        raise HTTPException(status_code=416, headers=headers, detail="Requested range not satisfiable")
+                        raise HTTPException(
+                            status_code=416, headers=headers, detail="Requested range not satisfiable")
 
                     # Use stream_range to get the partial content
                     range_result = await async_obj_store.stream_range(full_path, start=start_byte, end=end_byte)
                     if not range_result:
-                        raise HTTPException(status_code=404, detail="Object not found at specified path")
+                        raise HTTPException(
+                            status_code=404, detail="Object not found at specified path")
 
                     data_stream, content_length = range_result
                     headers["Content-Range"] = f"bytes {start_byte}-{end_byte}/{total_size}"
@@ -1055,15 +1112,18 @@ class DocumentService:
                 # Full content response - optimized to use size from get()
                 get_obj_result = await async_obj_store.get(full_path)
                 if not get_obj_result:
-                    raise HTTPException(status_code=404, detail="Object not found at specified path")
+                    raise HTTPException(
+                        status_code=404, detail="Object not found at specified path")
 
                 data_stream, file_size = get_obj_result
                 headers["Content-Length"] = str(file_size)
                 return StreamingResponse(data_stream, headers=headers)
 
             except Exception as e:
-                logger.error(f"Failed to get object for document {document_id} at path {full_path}: {e}", exc_info=True)
-                raise HTTPException(status_code=500, detail="Failed to get object from store")
+                logger.error(
+                    f"Failed to get object for document {document_id} at path {full_path}: {e}", exc_info=True)
+                raise HTTPException(
+                    status_code=500, detail="Failed to get object from store")
 
         # Execute query with proper session management
         return await self.db_ops._execute_query(_get_document_object)
@@ -1137,7 +1197,8 @@ class DocumentService:
             # Get collection config
             collection = await self.db_ops.query_collection(user_id, collection_id)
             collection_config = json.loads(collection.config)
-            index_types = self._get_index_types_for_collection(collection_config)
+            index_types = self._get_index_types_for_collection(
+                collection_config)
 
             for document_id in document_ids:
                 try:
@@ -1153,7 +1214,8 @@ class DocumentService:
                     if not document:
                         # Document not found at all
                         failed_documents.append(
-                            view_models.FailedDocument(document_id=document_id, name=None, error="DOCUMENT_NOT_FOUND")
+                            view_models.FailedDocument(
+                                document_id=document_id, name=None, error="DOCUMENT_NOT_FOUND")
                         )
                         failed_count += 1
                         continue
@@ -1167,7 +1229,8 @@ class DocumentService:
                             error_code = "DOCUMENT_NOT_UPLOADED"
 
                         failed_documents.append(
-                            view_models.FailedDocument(document_id=document_id, name=document.name, error=error_code)
+                            view_models.FailedDocument(
+                                document_id=document_id, name=document.name, error=error_code)
                         )
                         failed_count += 1
                         continue
@@ -1184,11 +1247,13 @@ class DocumentService:
                     confirmed_count += 1
 
                 except Exception as e:
-                    logger.error(f"Failed to confirm document {document_id}: {e}")
+                    logger.error(
+                        f"Failed to confirm document {document_id}: {e}")
                     # Try to get document name for better error reporting
                     document_name = None
                     try:
-                        stmt_name = select(db_models.Document.name).where(db_models.Document.id == document_id)
+                        stmt_name = select(db_models.Document.name).where(
+                            db_models.Document.id == document_id)
                         result_name = await session.execute(stmt_name)
                         document_name = result_name.scalar()
                     except Exception:
@@ -1209,6 +1274,207 @@ class DocumentService:
         return view_models.ConfirmDocumentsResponse(
             confirmed_count=confirmed_count, failed_count=failed_count, failed_documents=failed_documents
         )
+
+    async def copy_documents_from_collections(
+        self,
+        user_id: str,
+        target_collection_id: str,
+        source_collection_ids: list[str],
+        deduplicate: bool = True,
+    ) -> dict:
+        """
+        Copy documents from multiple source collections to target collection.
+
+        Args:
+            user_id: User ID who owns the target collection
+            target_collection_id: Target collection ID to copy documents to
+            source_collection_ids: List of source collection IDs to copy documents from
+            deduplicate: If True, skip documents with duplicate names (default: True)
+
+        Returns:
+            dict: Statistics about copied documents
+        """
+        copied_count = 0
+        skipped_count = 0
+        failed_count = 0
+        seen_document_names = set()
+
+        logger.info(
+            f"Starting document copy from {len(source_collection_ids)} collections to {target_collection_id}"
+        )
+
+        # Get target collection and its configuration
+        target_collection = await self.db_ops.query_collection(user_id, target_collection_id)
+        if not target_collection:
+            raise ResourceNotFoundException("Collection", target_collection_id)
+
+        target_collection_config = json.loads(target_collection.config)
+        index_types = self._get_index_types_for_collection(
+            target_collection_config)
+
+        # Process each source collection
+        for source_collection_id in source_collection_ids:
+            try:
+                # Try to get collection as owner first
+                source_collection = await self.db_ops.query_collection(user_id, source_collection_id)
+                source_user_id = user_id
+
+                # If not found as owner, check if it's a marketplace collection
+                if not source_collection:
+                    try:
+                        from aperag.service.marketplace_collection_service import marketplace_collection_service
+                        marketplace_info = await marketplace_collection_service._check_marketplace_access(
+                            user_id, source_collection_id
+                        )
+                        source_user_id = marketplace_info["owner_user_id"]
+                        source_collection = await self.db_ops.query_collection(source_user_id, source_collection_id)
+                    except Exception as e:
+                        logger.warning(
+                            f"Cannot access source collection {source_collection_id}: {e}"
+                        )
+                        failed_count += 1
+                        continue
+
+                if not source_collection:
+                    logger.warning(
+                        f"Source collection {source_collection_id} not found")
+                    failed_count += 1
+                    continue
+
+                # Get all documents from source collection
+                async def _get_source_documents(session):
+                    stmt = select(db_models.Document).where(
+                        db_models.Document.user == source_user_id,
+                        db_models.Document.collection_id == source_collection_id,
+                        db_models.Document.status == db_models.DocumentStatus.COMPLETED,
+                    )
+                    result = await session.execute(stmt)
+                    return result.scalars().all()
+
+                source_documents = await self.db_ops._execute_query(_get_source_documents)
+
+                logger.info(
+                    f"Found {len(source_documents)} documents in source collection {source_collection_id}"
+                )
+
+                # Copy each document
+                for source_doc in source_documents:
+                    try:
+                        # Check for duplicate name
+                        if deduplicate and source_doc.name in seen_document_names:
+                            logger.info(
+                                f"Skipping duplicate document: {source_doc.name}"
+                            )
+                            skipped_count += 1
+                            continue
+
+                        # Read source document file from object store
+                        async_obj_store = get_async_object_store()
+                        source_metadata = json.loads(
+                            source_doc.doc_metadata) if source_doc.doc_metadata else {}
+                        source_object_path = source_metadata.get("object_path")
+
+                        if not source_object_path:
+                            logger.warning(
+                                f"Document {source_doc.id} has no object_path, skipping"
+                            )
+                            failed_count += 1
+                            continue
+
+                        # Read file content from object store
+                        get_result = await async_obj_store.get(source_object_path)
+                        if not get_result:
+                            logger.warning(
+                                f"Cannot read object {source_object_path} for document {source_doc.id}, skipping"
+                            )
+                            failed_count += 1
+                            continue
+
+                        data_stream, file_size = get_result
+                        file_content = b""
+                        async for chunk in data_stream:
+                            file_content += chunk
+
+                        # Determine file suffix from original path
+                        file_suffix = os.path.splitext(
+                            source_object_path)[1].lower()
+
+                        # Create document in target collection
+                        async def _copy_document_atomically(session):
+                            # Check if document with same name already exists in target
+                            existing_doc = await self.db_ops.query_document_by_name_and_collection(
+                                user_id, target_collection_id, source_doc.name
+                            )
+
+                            if existing_doc:
+                                logger.info(
+                                    f"Document {source_doc.name} already exists in target collection, skipping"
+                                )
+                                return None
+
+                            # Create new document record
+                            new_document = await self._create_document_record(
+                                session=session,
+                                user=user_id,
+                                collection_id=target_collection_id,
+                                filename=source_doc.name,
+                                size=len(file_content),
+                                status=db_models.DocumentStatus.PENDING,
+                                file_suffix=file_suffix,
+                                file_content=file_content,
+                                content_hash=source_doc.content_hash,
+                            )
+
+                            # Create indexes for the new document
+                            await document_index_manager.create_or_update_document_indexes(
+                                document_id=new_document.id,
+                                index_types=index_types,
+                                session=session
+                            )
+
+                            return new_document
+
+                        new_doc = await self.db_ops.execute_with_transaction(_copy_document_atomically)
+
+                        if new_doc:
+                            seen_document_names.add(source_doc.name)
+                            copied_count += 1
+                            logger.info(
+                                f"Successfully copied document: {source_doc.name} (ID: {new_doc.id})"
+                            )
+                        else:
+                            skipped_count += 1
+
+                    except Exception as e:
+                        logger.error(
+                            f"Failed to copy document {source_doc.name} from {source_collection_id}: {e}",
+                            exc_info=True
+                        )
+                        failed_count += 1
+
+            except Exception as e:
+                logger.error(
+                    f"Failed to process source collection {source_collection_id}: {e}",
+                    exc_info=True
+                )
+                failed_count += 1
+
+        # Trigger index reconciliation after all copies
+        if copied_count > 0:
+            _trigger_index_reconciliation()
+
+        result = {
+            "copied_count": copied_count,
+            "skipped_count": skipped_count,
+            "failed_count": failed_count,
+            "message": f"Copied {copied_count} documents, skipped {skipped_count} duplicates, {failed_count} failed"
+        }
+
+        logger.info(
+            f"Document copy completed for collection {target_collection_id}: {result}"
+        )
+
+        return result
 
 
 # Create a global service instance for easy access

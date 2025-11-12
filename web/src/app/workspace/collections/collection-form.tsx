@@ -1,6 +1,6 @@
 'use client';
 
-import { ModelSpec } from '@/api';
+import { CollectionView, ModelSpec } from '@/api';
 import { useCollectionContext } from '@/components/providers/collection-provider';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -12,6 +12,13 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+} from '@/components/ui/command';
+import {
   Form,
   FormControl,
   FormDescription,
@@ -20,6 +27,11 @@ import {
   FormLabel,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 import {
   Select,
   SelectContent,
@@ -36,6 +48,7 @@ import { apiClient } from '@/lib/api/client';
 import { cn, objectKeys } from '@/lib/utils';
 import { zodResolver } from '@hookform/resolvers/zod';
 import _ from 'lodash';
+import { Check, ChevronsUpDown } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -67,6 +80,7 @@ const collectionSchema = z
       completion: collectionModelSchema,
       embedding: collectionModelSchema,
     }),
+    source_collection_ids: z.array(z.string()).optional(),
   })
   .refine(
     ({ config }) => {
@@ -119,6 +133,7 @@ const defaultValues: FormValueType = {
       model_service_provider: '',
     },
   },
+  source_collection_ids: [],
 };
 
 export type ProviderModel = {
@@ -132,6 +147,10 @@ export const CollectionForm = ({ action }: { action: 'add' | 'edit' }) => {
   const { collection, loadCollection } = useCollectionContext();
   const [completionModels, setCompletionModels] = useState<ProviderModel[]>();
   const [embeddingModels, setEmbeddingModels] = useState<ProviderModel[]>();
+  const [availableCollections, setAvailableCollections] = useState<
+    CollectionView[]
+  >([]);
+  const [isCollectionsOpen, setIsCollectionsOpen] = useState(false);
 
   const common_tips = useTranslations('common.tips');
   const common_action = useTranslations('common.action');
@@ -170,6 +189,24 @@ export const CollectionForm = ({ action }: { action: 'add' | 'edit' }) => {
     defaultValues:
       action === 'add' ? defaultValues : (collection as FormValueType),
   });
+
+  /**
+   * load available collections for copying documents
+   */
+  const loadAvailableCollections = useCallback(async () => {
+    if (action === 'add') {
+      try {
+        const res = await apiClient.defaultApi.collectionsGet({
+          page: 1,
+          pageSize: 100,
+          includeSubscribed: true,
+        });
+        setAvailableCollections(res.data.items || []);
+      } catch (error) {
+        console.error('Failed to load collections:', error);
+      }
+    }
+  }, [action]);
 
   /**
    * load models by 'enable_for_collection' in tags
@@ -317,11 +354,12 @@ export const CollectionForm = ({ action }: { action: 'add' | 'edit' }) => {
   }, [embeddingModelName, embeddingModels, form]);
 
   /**
-   * load models
+   * load models and collections
    */
   useEffect(() => {
     loadModels();
-  }, [loadModels]);
+    loadAvailableCollections();
+  }, [loadModels, loadAvailableCollections]);
 
   return (
     <>
@@ -374,6 +412,105 @@ export const CollectionForm = ({ action }: { action: 'add' | 'edit' }) => {
               />
             </CardContent>
           </Card>
+
+          {action === 'add' && availableCollections.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>{page_collections('copy_documents')}</CardTitle>
+                <CardDescription>
+                  {page_collections('copy_documents_description')}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <FormField
+                  control={form.control}
+                  name="source_collection_ids"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-col">
+                      <FormLabel>
+                        {page_collections('source_collections')}
+                      </FormLabel>
+                      <Popover
+                        open={isCollectionsOpen}
+                        onOpenChange={setIsCollectionsOpen}
+                      >
+                        <PopoverTrigger asChild>
+                          <FormControl>
+                            <Button
+                              variant="outline"
+                              role="combobox"
+                              className={cn(
+                                'w-full justify-between',
+                                !field.value?.length && 'text-muted-foreground',
+                              )}
+                            >
+                              {field.value?.length
+                                ? `${field.value.length} ${page_collections('collections_selected')}`
+                                : page_collections('select_collections')}
+                              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                            </Button>
+                          </FormControl>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-full p-0" align="start">
+                          <Command>
+                            <CommandInput
+                              placeholder={page_collections(
+                                'search_collections',
+                              )}
+                            />
+                            <CommandEmpty>
+                              {page_collections('no_collections_found')}
+                            </CommandEmpty>
+                            <CommandGroup className="max-h-64 overflow-auto">
+                              {availableCollections.map((col) => (
+                                <CommandItem
+                                  value={col.id}
+                                  key={col.id}
+                                  onSelect={() => {
+                                    const currentValue = field.value || [];
+                                    const newValue = currentValue.includes(
+                                      col.id!,
+                                    )
+                                      ? currentValue.filter(
+                                          (id) => id !== col.id,
+                                        )
+                                      : [...currentValue, col.id!];
+                                    field.onChange(newValue);
+                                  }}
+                                >
+                                  <Check
+                                    className={cn(
+                                      'mr-2 h-4 w-4',
+                                      field.value?.includes(col.id!)
+                                        ? 'opacity-100'
+                                        : 'opacity-0',
+                                    )}
+                                  />
+                                  <div className="flex flex-col">
+                                    <span className="font-medium">
+                                      {col.title}
+                                    </span>
+                                    {col.description && (
+                                      <span className="text-muted-foreground text-xs">
+                                        {col.description}
+                                      </span>
+                                    )}
+                                  </div>
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
+                      <FormDescription>
+                        {page_collections('source_collections_description')}
+                      </FormDescription>
+                    </FormItem>
+                  )}
+                />
+              </CardContent>
+            </Card>
+          )}
 
           <Card>
             <CardHeader>

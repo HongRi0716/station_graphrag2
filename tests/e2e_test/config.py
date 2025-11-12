@@ -23,28 +23,35 @@ API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
 WS_BASE_URL = os.getenv("WS_BASE_URL", "ws://localhost:8000/api/v1")
 
 # Please specify the model service provider name and API key using environment variables
-EMBEDDING_MODEL_PROVIDER = os.getenv("EMBEDDING_MODEL_PROVIDER", "alibabacloud")
+EMBEDDING_MODEL_PROVIDER = os.getenv("EMBEDDING_MODEL_PROVIDER", "siliconflow")
 EMBEDDING_MODEL_PROVIDER_URL = os.getenv(
-    "EMBEDDING_MODEL_PROVIDER_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1"
-)
-EMBEDDING_MODEL_PROVIDER_API_KEY = os.getenv("EMBEDDING_MODEL_PROVIDER_API_KEY", "")
+    "EMBEDDING_MODEL_PROVIDER_URL", "https://api.siliconflow.cn/v1")
+EMBEDDING_MODEL_PROVIDER_API_KEY = os.getenv(
+    "EMBEDDING_MODEL_PROVIDER_API_KEY", "")
 
-COMPLETION_MODEL_PROVIDER = os.getenv("COMPLETION_MODEL_PROVIDER", "openrouter")
-COMPLETION_MODEL_PROVIDER_URL = os.getenv("COMPLETION_MODEL_PROVIDER_URL", "https://openrouter.ai/api/v1")
-COMPLETION_MODEL_PROVIDER_API_KEY = os.getenv("COMPLETION_MODEL_PROVIDER_API_KEY", "")
+COMPLETION_MODEL_PROVIDER = os.getenv(
+    "COMPLETION_MODEL_PROVIDER", "siliconflow")
+COMPLETION_MODEL_PROVIDER_URL = os.getenv(
+    "COMPLETION_MODEL_PROVIDER_URL", "https://api.siliconflow.cn/v1")
+COMPLETION_MODEL_PROVIDER_API_KEY = os.getenv(
+    "COMPLETION_MODEL_PROVIDER_API_KEY", "")
 
-RERANK_MODEL_PROVIDER = os.getenv("RERANK_MODEL_PROVIDER", "alibabacloud")
-RERANK_MODEL_PROVIDER_URL = os.getenv("RERANK_MODEL_PROVIDER_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1")
+RERANK_MODEL_PROVIDER = os.getenv("RERANK_MODEL_PROVIDER", "siliconflow")
+RERANK_MODEL_PROVIDER_URL = os.getenv(
+    "RERANK_MODEL_PROVIDER_URL", "https://api.siliconflow.cn/v1")
 RERANK_MODEL_PROVIDER_API_KEY = os.getenv("RERANK_MODEL_PROVIDER_API_KEY", "")
 
 # The following model names are used for testing, please specify the model name using environment variables
-EMBEDDING_MODEL_NAME = os.getenv("EMBEDDING_MODEL_NAME", "text-embedding-v3")
-EMBEDDING_MODEL_CUSTOM_PROVIDER = os.getenv("EMBEDDING_MODEL_CUSTOM_PROVIDER", "openai")
+EMBEDDING_MODEL_NAME = os.getenv("EMBEDDING_MODEL_NAME", "BAAI/bge-m3")
+EMBEDDING_MODEL_CUSTOM_PROVIDER = os.getenv(
+    "EMBEDDING_MODEL_CUSTOM_PROVIDER", "openai")
 
-COMPLETION_MODEL_NAME = os.getenv("COMPLETION_MODEL_NAME", "google/gemini-2.5-flash")
-COMPLETION_MODEL_CUSTOM_PROVIDER = os.getenv("COMPLETION_MODEL_CUSTOM_PROVIDER", "openrouter")
+COMPLETION_MODEL_NAME = os.getenv("COMPLETION_MODEL_NAME", "Qwen/Qwen3-8B")
+COMPLETION_MODEL_CUSTOM_PROVIDER = os.getenv(
+    "COMPLETION_MODEL_CUSTOM_PROVIDER", "openai")
 
-RERANK_MODEL_NAME = os.getenv("RERANK_MODEL_NAME", "gte-rerank-v2")
-RERANK_MODEL_CUSTOM_PROVIDER = os.getenv("RERANK_MODEL_CUSTOM_PROVIDER", "alibabacloud")
+RERANK_MODEL_NAME = os.getenv("RERANK_MODEL_NAME", "BAAI/bge-reranker-v2-m3")
+RERANK_MODEL_CUSTOM_PROVIDER = os.getenv(
+    "RERANK_MODEL_CUSTOM_PROVIDER", "jina_ai")
 
 MAX_DOCUMENT_SIZE_MB = 100

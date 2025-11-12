@@ -130,17 +130,20 @@ class CollectionConfig(BaseModel):
     )
     embedding: Optional[ModelSpec] = None
     completion: Optional[ModelSpec] = None
-    path: Optional[str] = Field(None, description='Path for local and ftp sources')
+    path: Optional[str] = Field(
+        None, description='Path for local and ftp sources')
     host: Optional[str] = Field(None, description='FTP host')
     username: Optional[str] = Field(None, description='FTP username')
     password: Optional[str] = Field(None, description='FTP password')
     region: Optional[str] = Field(None, description='Region for S3/OSS')
-    access_key_id: Optional[str] = Field(None, description='Access key ID for S3/OSS')
+    access_key_id: Optional[str] = Field(
+        None, description='Access key ID for S3/OSS')
     secret_access_key: Optional[str] = Field(
         None, description='Secret access key for S3/OSS'
     )
     bucket: Optional[str] = Field(None, description='Bucket name for S3/OSS')
-    dir: Optional[str] = Field(None, description='Directory path in bucket for S3/OSS')
+    dir: Optional[str] = Field(
+        None, description='Directory path in bucket for S3/OSS')
     email_source: Optional[dict[str, Any]] = Field(
         None, description='Email source configuration'
     )
@@ -258,7 +261,8 @@ class Retry(BaseModel):
 
 
 class Notification(BaseModel):
-    email: Optional[list[EmailStr]] = Field(None, examples=[['admin@example.com']])
+    email: Optional[list[EmailStr]] = Field(
+        None, examples=[['admin@example.com']])
 
 
 class ErrorHandling(BaseModel):
@@ -388,8 +392,10 @@ class Edge(BaseModel):
         description='Whether the edge is deletable, only useful for frontend to delete the edge',
         examples=[True],
     )
-    type: Optional[str] = Field(None, description='Type of the edge', examples=['edge'])
-    source: str = Field(..., description='ID of the source node', examples=['start'])
+    type: Optional[str] = Field(
+        None, description='Type of the edge', examples=['edge'])
+    source: str = Field(..., description='ID of the source node', examples=[
+                        'start'])
     target: str = Field(
         ..., description='ID of the target node', examples=['vector_search_3f8e2c1a']
     )
@@ -482,7 +488,8 @@ class BotList(BaseModel):
 
 
 class FailResponse(BaseModel):
-    code: Optional[str] = Field(None, description='Error code', examples=['400'])
+    code: Optional[str] = Field(
+        None, description='Error code', examples=['400'])
     message: Optional[str] = Field(
         None, description='Error message', examples=['Invalid request']
     )
@@ -514,7 +521,8 @@ class Chat(BaseModel):
     bot_id: Optional[str] = None
     peer_id: Optional[str] = None
     peer_type: Optional[
-        Literal['system', 'feishu', 'weixin', 'weixin_official', 'web', 'dingtalk']
+        Literal['system', 'feishu', 'weixin',
+                'weixin_official', 'web', 'dingtalk']
     ] = None
     status: Optional[Literal['active', 'archived']] = None
     created: Optional[datetime] = None
@@ -563,7 +571,8 @@ class Reference(BaseModel):
 
 class Feedback(BaseModel):
     type: Optional[Literal['good', 'bad']] = None
-    tag: Optional[Literal['Harmful', 'Unsafe', 'Fake', 'Unhelpful', 'Other']] = None
+    tag: Optional[Literal['Harmful', 'Unsafe',
+                          'Fake', 'Unhelpful', 'Other']] = None
     message: Optional[str] = None
 
 
@@ -602,7 +611,8 @@ class ChatDetails(BaseModel):
     bot_id: Optional[str] = None
     peer_id: Optional[str] = None
     peer_type: Optional[
-        Literal['system', 'feishu', 'weixin', 'weixin_official', 'web', 'dingtalk']
+        Literal['system', 'feishu', 'weixin',
+                'weixin_official', 'web', 'dingtalk']
     ] = None
     history: Optional[list[list[ChatMessage]]] = Field(
         None,
@@ -740,8 +750,10 @@ class CollectionView(BaseModel):
     published_at: Optional[datetime] = Field(
         None, description='Publication time, null when not published'
     )
-    owner_user_id: Optional[str] = Field(None, description='Collection owner user ID')
-    owner_username: Optional[str] = Field(None, description='Collection owner username')
+    owner_user_id: Optional[str] = Field(
+        None, description='Collection owner user ID')
+    owner_username: Optional[str] = Field(
+        None, description='Collection owner username')
     subscription_id: Optional[str] = Field(
         None,
         description='Subscription ID if this is a subscribed collection, null for owned collections',
@@ -766,6 +778,11 @@ class CollectionCreate(BaseModel):
     type: Optional[str] = None
     description: Optional[str] = None
     source: Optional[CollectionSource] = None
+    source_collection_ids: Optional[list[str]] = Field(
+        None,
+        description='IDs of collections to copy documents from when creating this collection. Documents with duplicate names will be automatically deduplicated.',
+        examples=[['col_id_1', 'col_id_2']]
+    )
 
 
 class CollectionUpdate(BaseModel):
@@ -813,7 +830,8 @@ class DocumentPreview(BaseModel):
     doc_object_path: Optional[str] = Field(
         None, description='The path to the document object.'
     )
-    doc_filename: Optional[str] = Field(None, description='The name of the document.')
+    doc_filename: Optional[str] = Field(
+        None, description='The name of the document.')
     converted_pdf_object_path: Optional[str] = Field(
         None, description='The path to the converted PDF object.'
     )
@@ -896,7 +914,8 @@ class SearchResultItem(BaseModel):
     rank: Optional[int] = Field(None, description='Result rank')
     score: Optional[float] = Field(None, description='Result score')
     content: Optional[str] = Field(None, description='Result content')
-    source: Optional[str] = Field(None, description='Source document or metadata')
+    source: Optional[str] = Field(
+        None, description='Source document or metadata')
     recall_type: Optional[
         Literal[
             'vector_search',
@@ -957,9 +976,12 @@ class SearchRequest(BaseModel):
 
 
 class Settings(BaseModel):
-    use_mineru: Optional[bool] = Field(None, description='Whether to use MinerU')
-    mineru_api_token: Optional[str] = Field(None, description='API token for MinerU')
-    use_doc_ray: Optional[bool] = Field(None, description='Whether to use DocRay')
+    use_mineru: Optional[bool] = Field(
+        None, description='Whether to use MinerU')
+    mineru_api_token: Optional[str] = Field(
+        None, description='API token for MinerU')
+    use_doc_ray: Optional[bool] = Field(
+        None, description='Whether to use DocRay')
     use_markitdown: Optional[bool] = Field(
         None, description='Whether to use MarkItDown'
     )
@@ -1248,7 +1270,8 @@ class MergeSuggestionItem(BaseModel):
     """
 
     id: str = Field(..., description='Suggestion ID', examples=['msug123'])
-    collection_id: str = Field(..., description='Collection ID', examples=['col123'])
+    collection_id: str = Field(..., description='Collection ID', examples=[
+                               'col123'])
     suggestion_batch_id: str = Field(
         ..., description='Suggestion batch ID', examples=['batch456']
     )
@@ -1367,7 +1390,8 @@ class SharingStatusResponse(BaseModel):
     Simple sharing status response
     """
 
-    is_published: bool = Field(..., description='Whether published to marketplace')
+    is_published: bool = Field(...,
+                               description='Whether published to marketplace')
     published_at: Optional[datetime] = Field(
         None, description='Publication time, null when not published'
     )
@@ -1378,15 +1402,18 @@ class SharedCollectionConfig(BaseModel):
     Configuration settings for shared collection features
     """
 
-    enable_vector: bool = Field(..., description='Whether vector search is enabled')
-    enable_fulltext: bool = Field(..., description='Whether fulltext search is enabled')
+    enable_vector: bool = Field(...,
+                                description='Whether vector search is enabled')
+    enable_fulltext: bool = Field(...,
+                                  description='Whether fulltext search is enabled')
     enable_knowledge_graph: bool = Field(
         ..., description='Whether knowledge graph is enabled'
     )
     enable_summary: bool = Field(
         ..., description='Whether summary generation is enabled'
     )
-    enable_vision: bool = Field(..., description='Whether vision processing is enabled')
+    enable_vision: bool = Field(...,
+                                description='Whether vision processing is enabled')
 
 
 class SharedCollection(BaseModel):
@@ -1396,9 +1423,11 @@ class SharedCollection(BaseModel):
 
     id: str = Field(..., description='Collection ID')
     title: str = Field(..., description='Collection title')
-    description: Optional[str] = Field(None, description='Collection description')
+    description: Optional[str] = Field(
+        None, description='Collection description')
     owner_user_id: str = Field(..., description='Original owner user ID')
-    owner_username: Optional[str] = Field(None, description='Original owner username')
+    owner_username: Optional[str] = Field(
+        None, description='Original owner username')
     subscription_id: Optional[str] = Field(
         None,
         description='Subscription record ID (has value if subscribed, null if not subscribed)',
@@ -1406,7 +1435,8 @@ class SharedCollection(BaseModel):
     gmt_subscribed: Optional[datetime] = Field(
         None, description='Subscription time (only has value when subscribed)'
     )
-    subscription_count: int = Field(..., description='Total number of subscriptions')
+    subscription_count: int = Field(...,
+                                    description='Total number of subscriptions')
     config: SharedCollectionConfig = Field(
         ..., description='Collection configuration settings'
     )
@@ -1417,7 +1447,8 @@ class SharedCollectionList(BaseModel):
     Shared Collection list response
     """
 
-    items: list[SharedCollection] = Field(..., description='List of shared Collections')
+    items: list[SharedCollection] = Field(...,
+                                          description='List of shared Collections')
     total: int = Field(..., description='Total count (for pagination)')
     page: int = Field(..., description='Current page number')
     page_size: int = Field(..., description='Page size')
@@ -1583,7 +1614,8 @@ class LlmProvider(BaseModel):
         None, description='API key for this provider (if configured by user)'
     )
     created: Optional[datetime] = Field(None, description='Creation timestamp')
-    updated: Optional[datetime] = Field(None, description='Last update timestamp')
+    updated: Optional[datetime] = Field(
+        None, description='Last update timestamp')
 
 
 class LlmProviderModel(BaseModel):
@@ -1614,11 +1646,13 @@ class LlmProviderModel(BaseModel):
         examples=[['free', 'recommend']],
     )
     created: Optional[datetime] = Field(None, description='Creation timestamp')
-    updated: Optional[datetime] = Field(None, description='Last update timestamp')
+    updated: Optional[datetime] = Field(
+        None, description='Last update timestamp')
 
 
 class LlmConfigurationResponse(BaseModel):
-    providers: list[LlmProvider] = Field(..., description='List of LLM providers')
+    providers: list[LlmProvider] = Field(...,
+                                         description='List of LLM providers')
     models: list[LlmProviderModel] = Field(
         ..., description='List of LLM provider models'
     )
@@ -1642,7 +1676,8 @@ class LlmProviderCreateWithApiKey(BaseModel):
     allow_custom_base_url: Optional[bool] = Field(
         False, description='Whether custom base URLs are allowed'
     )
-    base_url: str = Field(..., description='Default API base URL for this provider')
+    base_url: str = Field(...,
+                          description='Default API base URL for this provider')
     extra: Optional[str] = Field(
         None, description='Additional configuration data in JSON format'
     )
@@ -1692,7 +1727,8 @@ class LlmProviderModelList(BaseModel):
 
 
 class LlmProviderModelCreate(BaseModel):
-    provider_name: str = Field(..., description='Reference to LLMProvider.name')
+    provider_name: str = Field(...,
+                               description='Reference to LLMProvider.name')
     api: Literal['completion', 'embedding', 'rerank'] = Field(
         ..., description='API type for this model'
     )
@@ -1709,7 +1745,8 @@ class LlmProviderModelCreate(BaseModel):
     max_output_tokens: Optional[int] = Field(
         None, description='Maximum output tokens', examples=[8000]
     )
-    tags: Optional[list[str]] = Field([], description='Tags for model categorization')
+    tags: Optional[list[str]] = Field(
+        [], description='Tags for model categorization')
 
 
 class LlmProviderModelUpdate(BaseModel):
@@ -1725,7 +1762,8 @@ class LlmProviderModelUpdate(BaseModel):
     max_output_tokens: Optional[int] = Field(
         None, description='Maximum output tokens', examples=[8000]
     )
-    tags: Optional[list[str]] = Field(None, description='Tags for model categorization')
+    tags: Optional[list[str]] = Field(
+        None, description='Tags for model categorization')
 
 
 class EmbeddingRequest(BaseModel):
@@ -1786,8 +1824,10 @@ class EmbeddingResponse(BaseModel):
     Response containing generated embeddings in OpenAI-compatible format
     """
 
-    object: str = Field(..., description='Object type identifier', examples=['list'])
-    data: list[EmbeddingData] = Field(..., description='List of embedding results')
+    object: str = Field(..., description='Object type identifier', examples=[
+                        'list'])
+    data: list[EmbeddingData] = Field(...,
+                                      description='List of embedding results')
     model: str = Field(
         ...,
         description='Model used for embedding generation',
@@ -1893,7 +1933,8 @@ class RerankResponse(BaseModel):
     Response containing reranked documents in industry-standard format
     """
 
-    object: str = Field(..., description='Object type identifier', examples=['list'])
+    object: str = Field(..., description='Object type identifier', examples=[
+                        'list'])
     data: list[RerankDocument] = Field(
         ...,
         description='List of reranked documents ordered by relevance (highest first)',
@@ -1920,7 +1961,8 @@ class Logto(BaseModel):
 
 
 class Auth(BaseModel):
-    type: Optional[Literal['none', 'auth0', 'authing', 'logto', 'cookie']] = None
+    type: Optional[Literal['none', 'auth0',
+                           'authing', 'logto', 'cookie']] = None
     auth0: Optional[Auth0] = None
     authing: Optional[Authing] = None
     logto: Optional[Logto] = None
@@ -1944,7 +1986,8 @@ class AuditLog(BaseModel):
     """
 
     id: Optional[str] = Field(None, description='Audit log ID')
-    user_id: Optional[str] = Field(None, description='User ID who performed the action')
+    user_id: Optional[str] = Field(
+        None, description='User ID who performed the action')
     username: Optional[str] = Field(None, description='Username for display')
     resource_type: Optional[
         Literal[
@@ -1982,14 +2025,17 @@ class AuditLog(BaseModel):
     duration_ms: Optional[int] = Field(
         None, description='Request duration in milliseconds (calculated)'
     )
-    request_data: Optional[str] = Field(None, description='Request data (JSON string)')
+    request_data: Optional[str] = Field(
+        None, description='Request data (JSON string)')
     response_data: Optional[str] = Field(
         None, description='Response data (JSON string)'
     )
-    error_message: Optional[str] = Field(None, description='Error message if failed')
+    error_message: Optional[str] = Field(
+        None, description='Error message if failed')
     ip_address: Optional[str] = Field(None, description='Client IP address')
     user_agent: Optional[str] = Field(None, description='User agent string')
-    request_id: Optional[str] = Field(None, description='Request ID for tracking')
+    request_id: Optional[str] = Field(
+        None, description='Request ID for tracking')
     created: Optional[datetime] = Field(None, description='Created timestamp')
 
 
@@ -1998,11 +2044,13 @@ class AuditLogList(PaginatedResponse):
     List of audit logs with pagination
     """
 
-    items: Optional[list[AuditLog]] = Field(None, description='Audit log entries')
+    items: Optional[list[AuditLog]] = Field(
+        None, description='Audit log entries')
 
 
 class InvitationCreate(BaseModel):
-    username: Optional[str] = Field(None, description='The username of the user')
+    username: Optional[str] = Field(
+        None, description='The username of the user')
     email: Optional[str] = Field(None, description='The email of the user')
     role: Optional[Literal['admin', 'rw', 'ro']] = Field(
         None, description='The role of the user (admin, rw, ro)'
@@ -2011,7 +2059,8 @@ class InvitationCreate(BaseModel):
 
 class Invitation(BaseModel):
     email: Optional[str] = Field(None, description='The email of the user')
-    token: Optional[str] = Field(None, description='The token of the invitation')
+    token: Optional[str] = Field(
+        None, description='The token of the invitation')
     created_by: Optional[str] = Field(
         None, description='The ID of the user who created the invitation'
     )
@@ -2048,16 +2097,20 @@ class Register(BaseModel):
 
     token: Optional[str] = Field(None, description='The invitation token')
     email: Optional[str] = Field(None, description='The email of the user')
-    username: Optional[str] = Field(None, description='The username of the user')
-    password: Optional[str] = Field(None, description='The password of the user')
+    username: Optional[str] = Field(
+        None, description='The username of the user')
+    password: Optional[str] = Field(
+        None, description='The password of the user')
 
 
 class User(BaseModel):
     id: Optional[str] = Field(None, description='The ID of the user')
-    username: Optional[str] = Field(None, description='The username of the user')
+    username: Optional[str] = Field(
+        None, description='The username of the user')
     email: Optional[str] = Field(None, description='The email of the user')
     role: Optional[str] = Field(None, description='The role of the user')
-    is_active: Optional[bool] = Field(None, description='Whether the user is active')
+    is_active: Optional[bool] = Field(
+        None, description='Whether the user is active')
     date_joined: Optional[str] = Field(
         None, description='The date and time the user joined the system'
     )
@@ -2068,8 +2121,10 @@ class User(BaseModel):
 
 
 class Login(BaseModel):
-    username: Optional[str] = Field(None, description='The username of the user')
-    password: Optional[str] = Field(None, description='The password of the user')
+    username: Optional[str] = Field(
+        None, description='The username of the user')
+    password: Optional[str] = Field(
+        None, description='The password of the user')
 
 
 class UserList(BaseModel):
@@ -2082,7 +2137,8 @@ class UserList(BaseModel):
 
 
 class ChangePassword(BaseModel):
-    username: Optional[str] = Field(None, description='The username of the user')
+    username: Optional[str] = Field(
+        None, description='The username of the user')
     old_password: Optional[str] = Field(
         None, description='The old password of the user'
     )
@@ -2099,9 +2155,12 @@ class QuotaInfo(BaseModel):
     quota_type: str = Field(
         ..., description='Type of quota', examples=['max_collection_count']
     )
-    quota_limit: int = Field(..., description='Maximum allowed usage', examples=[10])
-    current_usage: int = Field(..., description='Current usage count', examples=[3])
-    remaining: int = Field(..., description='Remaining quota available', examples=[7])
+    quota_limit: int = Field(..., description='Maximum allowed usage', examples=[
+                             10])
+    current_usage: int = Field(...,
+                               description='Current usage count', examples=[3])
+    remaining: int = Field(..., description='Remaining quota available', examples=[
+                           7])
 
 
 class UserQuotaInfo(BaseModel):
@@ -2110,12 +2169,14 @@ class UserQuotaInfo(BaseModel):
     """
 
     user_id: str = Field(..., description='User ID', examples=['user123'])
-    username: Optional[str] = Field(None, description='Username', examples=['john_doe'])
+    username: Optional[str] = Field(
+        None, description='Username', examples=['john_doe'])
     email: Optional[str] = Field(
         None, description='User email', examples=['john@example.com']
     )
     role: str = Field(..., description='User role', examples=['rw'])
-    quotas: list[QuotaInfo] = Field(..., description='List of quota information')
+    quotas: list[QuotaInfo] = Field(...,
+                                    description='List of quota information')
 
 
 class UserQuotaList(BaseModel):
@@ -2153,7 +2214,8 @@ class UpdatedQuota(BaseModel):
         description='Type of quota that was updated',
         examples=['max_collection_count'],
     )
-    old_limit: int = Field(..., description='Previous quota limit', examples=[10])
+    old_limit: int = Field(...,
+                           description='Previous quota limit', examples=[10])
     new_limit: int = Field(..., description='New quota limit', examples=[20])
 
 
@@ -2275,7 +2337,8 @@ class WebSearchResultItem(BaseModel):
     snippet: str = Field(
         ..., description='Page snippet', examples=['ApeRAG在2025年将重点发展...']
     )
-    domain: str = Field(..., description='Domain name', examples=['example.com'])
+    domain: str = Field(..., description='Domain name',
+                        examples=['example.com'])
     timestamp: Optional[datetime] = Field(
         None, description='Result timestamp', examples=['2025-01-01T00:00:00Z']
     )
@@ -2293,7 +2356,8 @@ class WebSearchResponse(BaseModel):
     total_results: Optional[int] = Field(
         None, description='Total number of results found'
     )
-    search_time: Optional[float] = Field(None, description='Search time in seconds')
+    search_time: Optional[float] = Field(
+        None, description='Search time in seconds')
 
 
 class WebReadRequest(BaseModel):
@@ -2323,7 +2387,8 @@ class WebReadResultItem(BaseModel):
     """
 
     url: str = Field(..., description='Requested URL')
-    status: Literal['success', 'error'] = Field(..., description='Processing status')
+    status: Literal['success',
+                    'error'] = Field(..., description='Processing status')
     title: Optional[str] = Field(None, description='Page title')
     content: Optional[str] = Field(
         None, description='Extracted content in Markdown format'
@@ -2331,8 +2396,10 @@ class WebReadResultItem(BaseModel):
     extracted_at: Optional[datetime] = Field(
         None, description='Content extraction timestamp'
     )
-    word_count: Optional[int] = Field(None, description='Word count of content')
-    token_count: Optional[int] = Field(None, description='Estimated token count')
+    word_count: Optional[int] = Field(
+        None, description='Word count of content')
+    token_count: Optional[int] = Field(
+        None, description='Estimated token count')
     error: Optional[str] = Field(None, description='Error message if failed')
     error_code: Optional[str] = Field(None, description='Error code if failed')
 
@@ -2342,9 +2409,11 @@ class WebReadResponse(BaseModel):
     Web content reading response
     """
 
-    results: list[WebReadResultItem] = Field(..., description='List of reading results')
+    results: list[WebReadResultItem] = Field(...,
+                                             description='List of reading results')
     total_urls: int = Field(..., description='Total number of URLs processed')
-    successful: int = Field(..., description='Number of successful extractions')
+    successful: int = Field(...,
+                            description='Number of successful extractions')
     failed: int = Field(..., description='Number of failed extractions')
     processing_time: Optional[float] = Field(
         None, description='Total processing time in seconds'
