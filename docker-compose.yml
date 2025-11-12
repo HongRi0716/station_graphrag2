@@ -32,7 +32,7 @@ services:
       - .env
       - envs/docker.env.overrides
     environment:
-      - DOCRAY_HOST=${DOCRAY_HOST}
+      - DOCRAY_HOST=http://aperag-docray:8639
     ports:
       - "8000:8000"
     command: ["/app/scripts/entrypoint.sh", "/app/scripts/start-api.sh"]
