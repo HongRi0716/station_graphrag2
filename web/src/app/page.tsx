@@ -1,7 +1,7 @@
 import { AppTopbar } from '@/components/app-topbar';
 import { PageContainer, PageContent } from '@/components/page-container';
 import { Button } from '@/components/ui/button';
-import { ArrowRight, Mail } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 
 const features = [
@@ -55,19 +55,9 @@ export default function Home() {
           ></div>
         </div>
         <PageContent className="mx-auto max-w-300 py-48">
-          <div className="hidden sm:mb-8 sm:flex sm:justify-center">
-            <div className="flex flex-row items-center gap-2 rounded-full border px-4 py-1 text-sm/6">
-              <Mail className="size-4" />
-              For technical questions, contact us by
-              <a href="mailto:sailwebs@apecloud.com" className="underline">
-                Email <span aria-hidden="true">&rarr;</span>
-              </a>
-            </div>
-          </div>
           <div className="text-center">
             <h1 className="text-4xl font-semibold tracking-tight text-balance sm:text-5xl">
-              Production-Ready RAG Platform with Graph, Vector & Full-Text
-              Search
+              变电站智能数字图书馆
             </h1>
             <p className="text-muted-foreground mt-8 text-lg">
               ApeRAG is a production-ready RAG (Retrieval-Augmented Generation)

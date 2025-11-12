@@ -32,17 +32,16 @@ import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { setLocale } from '@/services/cookies';
 import { useLocale, useTranslations } from 'next-intl';
-import { FaGithub } from 'react-icons/fa6';
 import { NavigationMenu, NavigationMenuList } from './ui/navigation-menu';
 import { UserAvatar, UserAvatarProfile } from './user-avatar';
 
 export const AppLogo = () => {
   return (
-    <Link href="/" className="flex h-8 w-8 items-center">
+    <Link href="/" className="flex h-12 w-12 items-center">
       <svg
         viewBox="0 0 120 120"
         xmlns="http://www.w3.org/2000/svg"
-        className="h-8 w-8"
+        className="h-12 w-12"
       >
         <defs>
           <style>
@@ -103,11 +102,11 @@ export const AppLogo = () => {
 
 export const AppShortLogo = () => {
   return (
-    <Link href="/" className="flex size-8 items-center">
+    <Link href="/" className="flex size-12 items-center">
       <svg
         viewBox="0 0 120 120"
         xmlns="http://www.w3.org/2000/svg"
-        className="h-8 w-8"
+        className="h-12 w-12"
       >
         <defs>
           <style>
@@ -330,15 +329,6 @@ export const AppDocs = () => (
   </Button>
 );
 
-export const AppGithub = () => (
-  <Button variant="ghost" size="icon" asChild>
-    <Link target="_blank" href="https://github.com/apecloud/ApeRAG">
-      <FaGithub />
-      <span className="sr-only">Github</span>
-    </Link>
-  </Button>
-);
-
 export const AppTopbar = ({ className }: React.ComponentProps<'div'>) => {
   return (
     <>
@@ -361,7 +351,6 @@ export const AppTopbar = ({ className }: React.ComponentProps<'div'>) => {
           </NavigationMenu>
         </div>
         <div className="flex flex-row items-center gap-2">
-          <AppGithub />
           <AppDocs />
           <AppThemeDropdownMenu />
           <AppUserDropdownMenu />
