@@ -37,12 +37,12 @@
   "common": {
     "site": {
       "metadata": {
-        "applicationName": "ApeRAG",
+        "applicationName": "PowerRAG",
         "authors": {
           "url": "https://github.com/apecloud/ApeRAG",
           "name": "ApeCloud"
         },
-        "title": "ApeRAG",
+        "title": "PowerRAG",
         "description": ""
       }
     },
@@ -235,12 +235,12 @@
     "update_collection": "更新知识库",
     "delete_collection": "删除知识库",
     "delete_collection_confirm": "此操作不可撤销。系统将永久删除该知识库，并从我们的服务器中移除所有相关文档。",
-    "publish_collection": "发布至public collection",
+    "publish_collection": "发布至公开知识库",
     "publish_collection_description": "允许用户发现并订阅您的知识库",
-    "unpublish_collection": "从public collection下架",
-    "unpublish_collection_description": "将此知识库从public collection中移除，转为私有状态",
-    "published_success": "已发布到public collection",
-    "unpublished_success": "已从public collection下架",
+    "unpublish_collection": "从公开知识库下架",
+    "unpublish_collection_description": "将此知识库从公开知识库中移除，转为私有状态",
+    "published_success": "已发布到公开知识库",
+    "unpublished_success": "已从公开知识库下架",
     "name": "名称",
     "name_placeholder": "知识库显示名称",
     "description": "描述",
@@ -372,7 +372,7 @@
   },
   "page_marketplace": {
     "metadata": {
-      "title": "public collection",
+      "title": "公开知识库",
       "description": "探索并订阅社区分享的优质知识合集，拓展你的知识边界。"
     },
     "no_collections_found": "未找到相关知识库",
@@ -516,7 +516,7 @@
   },
   "sidebar_workspace": {
     "repositories": "知识库",
-    "marketplace": "public collection",
+    "marketplace": "公开知识库",
     "collections": "我的知识库",
     "bots": "机器人",
     "chats": "会话",

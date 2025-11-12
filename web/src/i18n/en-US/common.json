@@ -1,13 +1,13 @@
 {
   "site": {
     "metadata": {
-      "applicationName": "ApeRAG",
+      "applicationName": "PowerRAG",
       "authors": {
         "url": "https://github.com/apecloud/ApeRAG",
         "name": "ApeCloud"
       },
-      "title": "ApeRAG",
-      "description": "Production-Ready RAG Platform with Graph, Vector & Full-Text Search."
+      "title": "PowerRAG",
+      "description": "PowerRAG - Substation intelligent digital library with graph, vector and full-text search."
     }
   },
   "action": {

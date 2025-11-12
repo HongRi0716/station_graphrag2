@@ -13,7 +13,6 @@ import {
 import {
   Check,
   ChevronsUpDown,
-  CircleQuestionMark,
   Globe,
   Moon,
   ShieldUser,
@@ -37,11 +36,14 @@ import { UserAvatar, UserAvatarProfile } from './user-avatar';
 
 export const AppLogo = () => {
   return (
-    <Link href="/" className="flex h-12 w-12 items-center">
+    <Link
+      href="/"
+      className="group flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-500/10 via-amber-400/5 to-transparent ring-1 ring-sky-500/20 transition-transform duration-300 hover:scale-105 hover:ring-sky-400/40"
+    >
       <svg
         viewBox="0 0 120 120"
         xmlns="http://www.w3.org/2000/svg"
-        className="h-12 w-12"
+        className="h-12 w-12 text-sky-500 drop-shadow-[0_0_12px_rgba(66,153,225,0.45)] transition-transform duration-300 group-hover:scale-110"
       >
         <defs>
           <style>
@@ -102,11 +104,14 @@ export const AppLogo = () => {
 
 export const AppShortLogo = () => {
   return (
-    <Link href="/" className="flex size-12 items-center">
+    <Link
+      href="/"
+      className="group flex size-16 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-500/10 via-amber-400/5 to-transparent ring-1 ring-sky-500/20 transition-transform duration-300 hover:scale-105 hover:ring-sky-400/40"
+    >
       <svg
         viewBox="0 0 120 120"
         xmlns="http://www.w3.org/2000/svg"
-        className="h-12 w-12"
+        className="h-12 w-12 text-sky-500 drop-shadow-[0_0_12px_rgba(66,153,225,0.45)] transition-transform duration-300 group-hover:scale-110"
       >
         <defs>
           <style>
@@ -320,15 +325,6 @@ export const AppLocaleDropdownMenu = () => {
   );
 };
 
-export const AppDocs = () => (
-  <Button variant="ghost" size="icon" asChild>
-    <Link href="/docs">
-      <CircleQuestionMark />
-      <span className="sr-only">Documents</span>
-    </Link>
-  </Button>
-);
-
 export const AppTopbar = ({ className }: React.ComponentProps<'div'>) => {
   return (
     <>
@@ -351,7 +347,6 @@ export const AppTopbar = ({ className }: React.ComponentProps<'div'>) => {
           </NavigationMenu>
         </div>
         <div className="flex flex-row items-center gap-2">
-          <AppDocs />
           <AppThemeDropdownMenu />
           <AppUserDropdownMenu />
         </div>
