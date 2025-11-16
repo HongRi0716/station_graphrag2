@@ -80,7 +80,46 @@ class DocumentParser:
                     parts.append(PdfPart(data=f.read()))
 
         if is_image_file(filepath_obj.suffix):
-            # Convert the image file to an asset
+            # For image files, optionally extract text using OCR and also create asset for vision-to-text
+            # OCR text will be merged with vision-to-text later in graph indexing if OCR is enabled
+            # Note: Vision index will be created before Graph index to ensure vision-to-text
+            # content is available for knowledge graph construction (see trigger_create_indexes_workflow)
+
+            # Check if OCR is enabled via configuration
+            # Priority: parser_config.ocr_enabled > settings.ocr_enabled > settings.siliconflow_ocr_enabled > default (False)
+            from aperag.config import settings
+            parser_config = parser_config or {}
+            ocr_enabled = parser_config.get("ocr_enabled")
+            if ocr_enabled is None:
+                ocr_enabled = settings.ocr_enabled or settings.siliconflow_ocr_enabled
+
+            # 1. Extract text using OCR (if enabled)
+            ocr_text = ""
+            ocr_method = "unknown"
+            if ocr_enabled:
+                try:
+                    from aperag.docparser.image_parser import ImageParser
+                    image_parser = ImageParser()
+                    if image_parser.supported_extensions() and filepath_obj.suffix.lower() in image_parser.supported_extensions():
+                        try:
+                            ocr_parts = image_parser.parse_file(
+                                filepath_obj, file_metadata)
+                            if ocr_parts and hasattr(ocr_parts[0], "content"):
+                                ocr_text = ocr_parts[0].content
+                                ocr_method = ocr_parts[0].metadata.get(
+                                    "ocr_method", "unknown")
+                                logger.info(
+                                    f"Extracted {len(ocr_text)} characters from image using OCR ({ocr_method})")
+                        except Exception as e:
+                            logger.warning(
+                                f"OCR extraction failed for {filepath_obj}: {e}")
+                except Exception as e:
+                    logger.debug(f"OCR not available or failed: {e}")
+            else:
+                logger.info(
+                    f"Skipping OCR for image {filepath_obj} (OCR_ENABLED=False), will use Vision-to-Text result directly")
+
+            # 2. Convert the image file to an asset for vision-to-text processing
             with open(filepath_obj, "rb") as f:
                 image_data = f.read()
                 mime_type, _ = mimetypes.guess_type(filepath_obj)
@@ -99,6 +138,17 @@ class DocumentParser:
                     mime_type=mime_type,
                 )
                 parts.append(asset_part)
+
+            # 3. Add OCR text as a TextPart if OCR was successful and enabled
+            # This will be merged with vision-to-text content later in graph indexing
+            if ocr_text:
+                from aperag.docparser.base import TextPart
+                ocr_metadata = file_metadata.copy()
+                ocr_metadata.update({
+                    "source": "ocr",
+                    "ocr_method": ocr_method,
+                })
+                parts.append(TextPart(content=ocr_text, metadata=ocr_metadata))
         else:
             # Convert PdfPart to image assets
             pdf_parts = [p for p in parts if isinstance(p, PdfPart)]
@@ -131,9 +181,11 @@ class DocumentParser:
                         )
                         parts.append(asset_part)
 
-                    logger.info(f"Converted {len(pdf_doc)} pages from a PDF part to image assets.")
+                    logger.info(
+                        f"Converted {len(pdf_doc)} pages from a PDF part to image assets.")
                 except Exception as e:
-                    logger.warning(f"Failed to convert PDF part to images: {e}", exc_info=True)
+                    logger.warning(
+                        f"Failed to convert PDF part to images: {e}", exc_info=True)
 
         logger.info(f"Parsed document {filepath} into {len(parts)} parts")
         return parts
@@ -162,12 +214,33 @@ class DocumentParser:
         content = ""
 
         # Extract full markdown content if available
-        md_part = next((part for part in doc_parts if isinstance(part, MarkdownPart)), None)
+        md_part = next(
+            (part for part in doc_parts if isinstance(part, MarkdownPart)), None)
         if md_part is not None:
             content = md_part.markdown
             doc_parts.remove(md_part)
 
-        pdf_part = next((part for part in doc_parts if isinstance(part, PdfPart)), None)
+        # Extract OCR text from TextPart (for image files)
+        # OCR text will be merged with vision-to-text content later in graph indexing
+        from aperag.docparser.base import TextPart
+        text_parts = [part for part in doc_parts if isinstance(
+            part, TextPart) and part.metadata.get("source") == "ocr"]
+        if text_parts:
+            ocr_contents = [
+                part.content for part in text_parts if part.content]
+            if ocr_contents:
+                ocr_content = "\n\n".join(ocr_contents)
+                if content:
+                    content = content + "\n\n------ OCR Text ------\n" + ocr_content
+                else:
+                    content = "------ OCR Text ------\n" + ocr_content
+                # Remove OCR TextPart from doc_parts (they're already merged into content)
+                for part in text_parts:
+                    if part in doc_parts:
+                        doc_parts.remove(part)
+
+        pdf_part = next(
+            (part for part in doc_parts if isinstance(part, PdfPart)), None)
         if pdf_part is not None:
             doc_parts.remove(pdf_part)
 
@@ -180,13 +253,15 @@ class DocumentParser:
             md_upload_path = f"{base_path}/parsed.md"
             md_data = content.encode("utf-8")
             obj_store.put(md_upload_path, md_data)
-            logger.info(f"uploaded markdown content to {md_upload_path}, size: {len(md_data)}")
+            logger.info(
+                f"uploaded markdown content to {md_upload_path}, size: {len(md_data)}")
 
             if pdf_part is not None:
                 converted_pdf_upload_path = f"{base_path}/converted.pdf"
                 linearized_pdf_data = self.linearize_pdf(pdf_part.data)
                 obj_store.put(converted_pdf_upload_path, linearized_pdf_data)
-                logger.info(f"uploaded converted pdf to {converted_pdf_upload_path}, size: {len(linearized_pdf_data)}")
+                logger.info(
+                    f"uploaded converted pdf to {converted_pdf_upload_path}, size: {len(linearized_pdf_data)}")
 
             # Save assets
             to_be_deleted = []
@@ -200,7 +275,8 @@ class DocumentParser:
                 asset_upload_path = f"{base_path}/assets/{part.asset_id}"
                 obj_store.put(asset_upload_path, part.data)
                 asset_count += 1
-                logger.info(f"uploaded asset to {asset_upload_path}, size: {len(part.data)}")
+                logger.info(
+                    f"uploaded asset to {asset_upload_path}, size: {len(part.data)}")
 
             if to_be_deleted:
                 for part in to_be_deleted:
@@ -223,7 +299,8 @@ class DocumentParser:
         from aperag.docparser.base import MarkdownPart
 
         # Check if MarkdownPart exists
-        md_part = next((part for part in doc_parts if isinstance(part, MarkdownPart)), None)
+        md_part = next(
+            (part for part in doc_parts if isinstance(part, MarkdownPart)), None)
         if md_part is not None:
             return md_part.markdown
 
@@ -256,15 +333,18 @@ class DocumentParser:
         """
         try:
             # Parse document into parts
-            doc_parts = self.parse_document(filepath, file_metadata, parser_config)
+            doc_parts = self.parse_document(
+                filepath, file_metadata, parser_config)
 
             # Save processed content and assets to object storage
-            content = self.save_processed_content_and_assets(doc_parts, object_store_base_path)
+            content = self.save_processed_content_and_assets(
+                doc_parts, object_store_base_path)
 
             return DocumentParsingResult(doc_parts=doc_parts, content=content, metadata={"parts_count": len(doc_parts)})
 
         except Exception as e:
-            raise Exception(f"Document parsing failed for {filepath}: {str(e)}")
+            raise Exception(
+                f"Document parsing failed for {filepath}: {str(e)}")
 
 
 # Global parser instance

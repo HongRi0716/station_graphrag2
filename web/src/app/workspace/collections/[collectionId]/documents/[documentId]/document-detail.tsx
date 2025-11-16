@@ -91,6 +91,12 @@ export const DocumentDetail = ({
             <TabsList>
               <TabsTrigger value="markdown">Markdown</TabsTrigger>
               {isPdf && <TabsTrigger value="pdf">PDF</TabsTrigger>}
+              {documentPreview.vision_chunks &&
+                documentPreview.vision_chunks.length > 0 && (
+                  <TabsTrigger value="vision">
+                    Vision-to-Text ({documentPreview.vision_chunks.length})
+                  </TabsTrigger>
+                )}
             </TabsList>
           </div>
         </div>
@@ -129,6 +135,53 @@ export const DocumentDetail = ({
             </PDFDocument>
           </TabsContent>
         )}
+
+        {documentPreview.vision_chunks &&
+          documentPreview.vision_chunks.length > 0 && (
+            <TabsContent value="vision">
+              <div className="flex flex-col gap-4">
+                {documentPreview.vision_chunks.map((chunk, index) => {
+                  const metadata = chunk.metadata as
+                    | { page_idx?: number }
+                    | undefined;
+                  const pageIdx = metadata?.page_idx;
+                  const assetId = chunk.asset_id;
+                  return (
+                    <Card key={chunk.id || index}>
+                      <CardContent className="pt-6">
+                        <div className="mb-4 flex flex-row items-center justify-between">
+                          <div className="text-muted-foreground text-sm font-medium">
+                            {assetId ? (
+                              <>
+                                Asset: {assetId}
+                                {pageIdx !== undefined && pageIdx !== null && (
+                                  <span className="ml-2">
+                                    (Page {Number(pageIdx) + 1})
+                                  </span>
+                                )}
+                              </>
+                            ) : (
+                              <>
+                                Vision Analysis {index + 1}
+                                {pageIdx !== undefined && pageIdx !== null && (
+                                  <span className="ml-2">
+                                    (Page {Number(pageIdx) + 1})
+                                  </span>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        </div>
+                        <div className="prose prose-sm dark:prose-invert max-w-none">
+                          <Markdown>{chunk.text || ''}</Markdown>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            </TabsContent>
+          )}
       </Tabs>
     </>
   );

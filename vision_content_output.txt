@@ -1,0 +1,247 @@
+================================================================================
+Vision-to-Text 内容 (共 1 个chunks)
+================================================================================
+
+--------------------------------------------------------------------------------
+Chunk 1/1
+--------------------------------------------------------------------------------
+ID: 33d07e62-680c-4500-a145-82324e09953d
+Asset ID: page_0.png
+
+Metadata:
+{
+  "object_path": "user-user602030f51f4a9d62/colb948520084941356/docf83852b7578bb718/original.pdf",
+  "doc_id": "docf83852b7578bb718",
+  "name": "颍州变接线图.pdf",
+  "page_idx": 0,
+  "converted_from": "pdf",
+  "vision_index": true,
+  "collection_id": "colb948520084941356",
+  "document_id": "docf83852b7578bb718",
+  "source": "颍州变接线图.pdf",
+  "asset_id": "page_0.png",
+  "mimetype": "image/png",
+  "indexer": "vision",
+  "index_method": "vision_to_text"
+}
+
+内容长度: 7070 字符
+
+--------------------------------------------------------------------------------
+内容:
+--------------------------------------------------------------------------------
+## Overall Summary:
+The image is an electrical substation wiring diagram, specifically a 500kV Yicheng Substation Main Connection Diagram. It illustrates the primary electrical connections and system structure within the substation, including transformers, circuit breakers, disconnect switches, busbars, and transmission lines. The diagram is labeled with equipment identifiers and voltage levels, providing a clear overview of the power flow and system configuration.
+
+## Detailed Text Extraction:
+```markdown
+500kV Yicheng Substation Main Connection Diagram
+生产管控中心 二〇二三年六月
+```
+
+## Specialized Analysis (Electrical/Substation Diagrams):
+### Equipment and Component Identification:
+- **Transformers (主变, 变压器):**
+  - 1号主变 (Transformer 1)
+  - 2号主变 (Transformer 2)
+- **Circuit Breakers (断路器):**
+  - 50117
+  - 50118
+  - 50119
+- **Disconnect Switches (隔离开关):**
+  - 50111
+  - 50112
+  - 50113
+  - 50114
+  - 50115
+  - 50116
+- **Busbars (母线):**
+  - 220kV IB母 (220kV IB Busbar)
+  - 220kV IA母 (220kV IA Busbar)
+- **Transmission Lines (线路):**
+  - 汤州5354线 (Tangzhou 5354 Line)
+  - 汤颖5353线 (Tangying 5353 Line)
+  - 汤颖5352线 (Tangying 5352 Line)
+  - 汤颖5351线 (Tangying 5351 Line)
+  - 汤颖5350线 (Tangying 5350 Line)
+  - 汤颖5349线 (Tangying 5349 Line)
+  - 汤颖5348线 (Tangying 5348 Line)
+  - 汤颖5347线 (Tangying 5347 Line)
+  - 汤颖5346线 (Tangying 5346 Line)
+  - 汤颖5345线 (Tangying 5345 Line)
+  - 汤颖5344线 (Tangying 5344 Line)
+  - 汤颖5343线 (Tangying 5343 Line)
+  - 汤颖5342线 (Tangying 5342 Line)
+  - 汤颖5341线 (Tangying 5341 Line)
+  - 汤颖5340线 (Tangying 5340 Line)
+  - 汤颖5339线 (Tangying 5339 Line)
+  - 汤颖5338线 (Tangying 5338 Line)
+  - 汤颖5337线 (Tangying 5337 Line)
+  - 汤颖5336线 (Tangying 5336 Line)
+  - 汤颖5335线 (Tangying 5335 Line)
+  - 汤颖5334线 (Tangying 5334 Line)
+  - 汤颖5333线 (Tangying 5333 Line)
+  - 汤颖5332线 (Tangying 5332 Line)
+  - 汤颖5331线 (Tangying 5331 Line)
+  - 汤颖5330线 (Tangying 5330 Line)
+  - 汤颖5329线 (Tangying 5329 Line)
+  - 汤颖5328线 (Tangying 5328 Line)
+  - 汤颖5327线 (Tangying 5327 Line)
+  - 汤颖5326线 (Tangying 5326 Line)
+  - 汤颖5325线 (Tangying 5325 Line)
+  - 汤颖5324线 (Tangying 5324 Line)
+  - 汤颖5323线 (Tangying 5323 Line)
+  - 汤颖5322线 (Tangying 5322 Line)
+  - 汤颖5321线 (Tangying 5321 Line)
+  - 汤颖5320线 (Tangying 5320 Line)
+  - 汤颖5319线 (Tangying 5319 Line)
+  - 汤颖5318线 (Tangying 5318 Line)
+  - 汤颖5317线 (Tangying 5317 Line)
+  - 汤颖5316线 (Tangying 5316 Line)
+  - 汤颖5315线 (Tangying 5315 Line)
+  - 汤颖5314线 (Tangying 5314 Line)
+  - 汤颖5313线 (Tangying 5313 Line)
+  - 汤颖5312线 (Tangying 5312 Line)
+  - 汤颖5311线 (Tangying 5311 Line)
+  - 汤颖5310线 (Tangying 5310 Line)
+  - 汤颖5309线 (Tangying 5309 Line)
+  - 汤颖5308线 (Tangying 5308 Line)
+  - 汤颖5307线 (Tangying 5307 Line)
+  - 汤颖5306线 (Tangying 5306 Line)
+  - 汤颖5305线 (Tangying 5305 Line)
+  - 汤颖5304线 (Tangying 5304 Line)
+  - 汤颖5303线 (Tangying 5303 Line)
+  - 汤颖5302线 (Tangying 5302 Line)
+  - 汤颖5301线 (Tangying 5301 Line)
+  - 汤颖5300线 (Tangying 5300 Line)
+  - 汤颖5299线 (Tangying 5299 Line)
+  - 汤颖5298线 (Tangying 5298 Line)
+  - 汤颖5297线 (Tangying 5297 Line)
+  - 汤颖5296线 (Tangying 5296 Line)
+  - 汤颖5295线 (Tangying 5295 Line)
+  - 汤颖5294线 (Tangying 5294 Line)
+  - 汤颖5293线 (Tangying 5293 Line)
+  - 汤颖5292线 (Tangying 5292 Line)
+  - 汤颖5291线 (Tangying 5291 Line)
+  - 汤颖5290线 (Tangying 5290 Line)
+  - 汤颖5289线 (Tangying 5289 Line)
+  - 汤颖5288线 (Tangying 5288 Line)
+  - 汤颖5287线 (Tangying 5287 Line)
+  - 汤颖5286线 (Tangying 5286 Line)
+  - 汤颖5285线 (Tangying 5285 Line)
+  - 汤颖5284线 (Tangying 5284 Line)
+  - 汤颖5283线 (Tangying 5283 Line)
+  - 汤颖5282线 (Tangying 5282 Line)
+  - 汤颖5281线 (Tangying 5281 Line)
+  - 汤颖5280线 (Tangying 5280 Line)
+  - 汤颖5279线 (Tangying 5279 Line)
+  - 汤颖5278线 (Tangying 5278 Line)
+  - 汤颖5277线 (Tangying 5277 Line)
+  - 汤颖5276线 (Tangying 5276 Line)
+  - 汤颖5275线 (Tangying 5275 Line)
+  - 汤颖5274线 (Tangying 5274 Line)
+  - 汤颖5273线 (Tangying 5273 Line)
+  - 汤颖5272线 (Tangying 5272 Line)
+  - 汤颖5271线 (Tangying 5271 Line)
+  - 汤颖5270线 (Tangying 5270 Line)
+  - 汤颖5269线 (Tangying 5269 Line)
+  - 汤颖5268线 (Tangying 5268 Line)
+  - 汤颖5267线 (Tangying 5267 Line)
+  - 汤颖5266线 (Tangying 5266 Line)
+  - 汤颖5265线 (Tangying 5265 Line)
+  - 汤颖5264线 (Tangying 5264 Line)
+  - 汤颖5263线 (Tangying 5263 Line)
+  - 汤颖5262线 (Tangying 5262 Line)
+  - 汤颖5261线 (Tangying 5261 Line)
+  - 汤颖5260线 (Tangying 5260 Line)
+  - 汤颖5259线 (Tangying 5259 Line)
+  - 汤颖5258线 (Tangying 5258 Line)
+  - 汤颖5257线 (Tangying 5257 Line)
+  - 汤颖5256线 (Tangying 5256 Line)
+  - 汤颖5255线 (Tangying 5255 Line)
+  - 汤颖5254线 (Tangying 5254 Line)
+  - 汤颖5253线 (Tangying 5253 Line)
+  - 汤颖5252线 (Tangying 5252 Line)
+  - 汤颖5251线 (Tangying 5251 Line)
+  - 汤颖5250线 (Tangying 5250 Line)
+  - 汤颖5249线 (Tangying 5249 Line)
+  - 汤颖5248线 (Tangying 5248 Line)
+  - 汤颖5247线 (Tangying 5247 Line)
+  - 汤颖5246线 (Tangying 5246 Line)
+  - 汤颖5245线 (Tangying 5245 Line)
+  - 汤颖5244线 (Tangying 5244 Line)
+  - 汤颖5243线 (Tangying 5243 Line)
+  - 汤颖5242线 (Tangying 5242 Line)
+  - 汤颖5241线 (Tangying 5241 Line)
+  - 汤颖5240线 (Tangying 5240 Line)
+  - 汤颖5239线 (Tangying 5239 Line)
+  - 汤颖5238线 (Tangying 5238 Line)
+  - 汤颖5237线 (Tangying 5237 Line)
+  - 汤颖5236线 (Tangying 5236 Line)
+  - 汤颖5235线 (Tangying 5235 Line)
+  - 汤颖5234线 (Tangying 5234 Line)
+  - 汤颖5233线 (Tangying 5233 Line)
+  - 汤颖5232线 (Tangying 5232 Line)
+  - 汤颖5231线 (Tangying 5231 Line)
+  - 汤颖5230线 (Tangying 5230 Line)
+  - 汤颖5229线 (Tangying 5229 Line)
+  - 汤颖5228线 (T single bus, double bus, ring bus, etc.)
+  - **Busbar connections and configurations (single bus, double bus, ring bus, etc.)**
+  - **Describe the system topology:**
+    - Overall system structure and layout
+    - Voltage level transitions (e.g., 500kV to 220kV transformation)
+    - Main power flow paths
+    - Redundancy and backup configurations
+    - Different intervals (间隔) and their associated equipment
+  - **Group similar equipment together** (e.g., "Circuit breakers: 50117, 50118, 50119" instead of listing each separately multiple times).
+
+### Object and Component Recognition:
+- **Transformers (主变, 变压器):**
+  - 1号主变 (Transformer 1)
+  - 2号主变 (Transformer 2)
+- **Circuit Breakers (断路器):**
+  - 50117
+  - 50118
+  - 50119
+- **Disconnect Switches (隔离开关):**
+  - 50111
+  - 50112
+  - 50113
+  - 50114
+  - 50115
+  - 50116
+- **Busbars (母线):**
+  - 220kV IB母 (220kV IB Busbar)
+  - 220kV IA母 (220kV IA Busbar)
+- **Transmission Lines (线路):**
+  - 汤州5354线 (Tangzhou 5354 Line)
+  - 汤颖5353线 (Tangying 5353 Line)
+  - 汤颖5352线 (Tangying 5352 Line)
+  - 汤颖5351线 (Tangying 5351 Line)
+  - 汤颖5350线 (Tangying 5350 Line)
+  - 汤颖5349线 (Tangying 5349 Line)
+  - 汤颖5348线 (Tangying 5348 Line)
+  - 汤颖5347线 (Tangying 5347 Line)
+  - 汤颖5346线 (Tangying 5346 Line)
+  - 汤颖5345线 (Tangying 5345 Line)
+  - 汤颖5344线 (Tangying 5344 Line)
+  - 汤颖5343线 (Tangying 5343 Line)
+  - 汤颖5342线 (Tangying 5342 Line)
+  - 汤颖5341线 (Tangying 5341 Line)
+  - 汤颖5340线 (Tangying 5340 Line)
+  - 汤颖5339线 (Tangying 5339 Line)
+  - 汤颖5338线 (Tangying 5338 Line)
+  - 汤颖5337线 (Tangying 5337 Line)
+  - 汤颖5336线 (Tangying 5336 Line)
+  - 汤颖5335线 (Tangying 5335 Line)
+  - 汤颖5334线 (Tangying 5334 Line)
+  - 汤颖5333线 (Tangying 5333 Line)
+  - 汤颖5332线 (Tangying 5332 Line)
+  - 汤颖5331线 (Tangying 5331 Line)
+  - 汤颖5330线 (Tangying 5330 Line)
+  - 汤颖5329线 (Tangying 5329 Line)
+  - 汤颖5328线 (Tangying 5328 Line)
+  - 汤颖5327线 (Tangying 5327 Line)
+  -
+
+================================================================================

@@ -118,6 +118,7 @@ from config.celery import app
 
 logger = logging.getLogger()
 
+
 def _validate_task_relevance(document_id: str, index_type: str, target_version: int, expected_status: "DocumentIndexStatus"):
     """
     Double-check the database to ensure the task is still valid.
@@ -141,15 +142,18 @@ def _validate_task_relevance(document_id: str, index_type: str, target_version: 
         db_index = result.scalar_one_or_none()
 
         if not db_index:
-            logger.info(f"Index record not found for {document_id}:{index_type}, skipping task.")
+            logger.info(
+                f"Index record not found for {document_id}:{index_type}, skipping task.")
             return {"status": "skipped", "reason": "index_record_not_found"}
 
         if db_index.status != expected_status:
-            logger.info(f"Index status for {document_id}:{index_type} changed to {db_index.status} (expected {expected_status}), skipping task.")
+            logger.info(
+                f"Index status for {document_id}:{index_type} changed to {db_index.status} (expected {expected_status}), skipping task.")
             return {"status": "skipped", "reason": f"status_changed_to_{db_index.status}"}
 
         if target_version and db_index.version != target_version:
-            logger.info(f"Version mismatch for {document_id}:{index_type}, expected: {target_version}, current: {db_index.version}, skipping task.")
+            logger.info(
+                f"Version mismatch for {document_id}:{index_type}, expected: {target_version}, current: {db_index.version}, skipping task.")
             return {"status": "skipped", "reason": f"version_mismatch_expected_{target_version}_current_{db_index.version}"}
 
         # Check document status - if document is UPLOADED or EXPIRED, task should be skipped
@@ -162,10 +166,12 @@ def _validate_task_relevance(document_id: str, index_type: str, target_version: 
             return {"status": "skipped", "reason": "document_not_found"}
 
         if document.status in [DocumentStatus.UPLOADED, DocumentStatus.EXPIRED]:
-            logger.info(f"Document {document_id} status is {document.status}, skipping task.")
+            logger.info(
+                f"Document {document_id} status is {document.status}, skipping task.")
             return {"status": "skipped", "reason": f"document_status_{document.status}"}
 
         return None  # Task is still relevant
+
 
 class BaseIndexTask(Task):
     """
@@ -178,30 +184,39 @@ class BaseIndexTask(Task):
         try:
             from aperag.tasks.reconciler import index_task_callbacks
             index_data_json = json.dumps(index_data) if index_data else None
-            index_task_callbacks.on_index_created(document_id, index_type, target_version, index_data_json)
-            logger.info(f"Index success callback executed for {index_type} index of document {document_id} (v{target_version})")
+            index_task_callbacks.on_index_created(
+                document_id, index_type, target_version, index_data_json)
+            logger.info(
+                f"Index success callback executed for {index_type} index of document {document_id} (v{target_version})")
         except Exception as e:
-            logger.warning(f"Failed to execute index success callback for {index_type} of {document_id} v{target_version}: {e}", exc_info=True)
+            logger.warning(
+                f"Failed to execute index success callback for {index_type} of {document_id} v{target_version}: {e}", exc_info=True)
 
     def _handle_index_deletion_success(self, document_id: str, index_type: str):
         try:
             from aperag.tasks.reconciler import index_task_callbacks
             index_task_callbacks.on_index_deleted(document_id, index_type)
-            logger.info(f"Index deletion callback executed for {index_type} index of document {document_id}")
+            logger.info(
+                f"Index deletion callback executed for {index_type} index of document {document_id}")
         except Exception as e:
-            logger.warning(f"Failed to execute index deletion callback for {index_type} of {document_id}: {e}", exc_info=True)
+            logger.warning(
+                f"Failed to execute index deletion callback for {index_type} of {document_id}: {e}", exc_info=True)
 
     def _handle_index_failure(self, document_id: str, index_types: List[str], error_msg: str):
         try:
             from aperag.tasks.reconciler import index_task_callbacks
 
             for index_type in index_types:
-                index_task_callbacks.on_index_failed(document_id, index_type, error_msg)
-            logger.info(f"Index failure callback executed for {index_types} indexes of document {document_id}")
+                index_task_callbacks.on_index_failed(
+                    document_id, index_type, error_msg)
+            logger.info(
+                f"Index failure callback executed for {index_types} indexes of document {document_id}")
         except Exception as e:
-            logger.warning(f"Failed to execute index failure callback for {document_id}: {e}", exc_info=True)
+            logger.warning(
+                f"Failed to execute index failure callback for {document_id}: {e}", exc_info=True)
 
 # ========== Core Document Processing Tasks ==========
+
 
 @current_app.task(bind=True, base=BaseIndexTask, autoretry_for=(Exception,), retry_kwargs={'max_retries': 3, 'countdown': 60})
 def parse_document_task(self, document_id: str, index_types: List[str]) -> dict:
@@ -253,10 +268,12 @@ def create_index_task(self, document_id: str, index_type: str, parsed_data_dict:
     target_version = context.get(f'{index_type}_version')
 
     try:
-        logger.info(f"Starting to create {index_type} index for document {document_id} (v{target_version})")
+        logger.info(
+            f"Starting to create {index_type} index for document {document_id} (v{target_version})")
 
         # Double-check: verify task is still valid
-        skip_reason = _validate_task_relevance(document_id, index_type, target_version, DocumentIndexStatus.CREATING)
+        skip_reason = _validate_task_relevance(
+            document_id, index_type, target_version, DocumentIndexStatus.CREATING)
         if skip_reason:
             return skip_reason
 
@@ -264,7 +281,8 @@ def create_index_task(self, document_id: str, index_type: str, parsed_data_dict:
         parsed_data = ParsedDocumentData.from_dict(parsed_data_dict)
 
         # Execute index creation
-        result = document_index_task.create_index(document_id, index_type, parsed_data)
+        result = document_index_task.create_index(
+            document_id, index_type, parsed_data)
 
         # Check if the operation failed and raise exception to trigger retry
         if not result.success:
@@ -273,8 +291,10 @@ def create_index_task(self, document_id: str, index_type: str, parsed_data_dict:
             raise Exception(error_msg)
 
         # Handle success callback with version validation
-        logger.info(f"Successfully created {index_type} index for document {document_id} (v{target_version})")
-        self._handle_index_success(document_id, index_type, target_version, result.data)
+        logger.info(
+            f"Successfully created {index_type} index for document {document_id} (v{target_version})")
+        self._handle_index_success(
+            document_id, index_type, target_version, result.data)
 
         return result.to_dict()
 
@@ -306,7 +326,8 @@ def delete_index_task(self, document_id: str, index_type: str) -> dict:
     from sqlalchemy import select, and_
 
     try:
-        logger.info(f"Starting to delete {index_type} index for document {document_id}")
+        logger.info(
+            f"Starting to delete {index_type} index for document {document_id}")
 
         # Double-check: verify task is still valid
         for session in get_sync_session():
@@ -321,11 +342,13 @@ def delete_index_task(self, document_id: str, index_type: str) -> dict:
 
             # Validate task is still relevant
             if not db_index:
-                logger.info(f"Index record not found for {document_id}:{index_type}, already deleted")
+                logger.info(
+                    f"Index record not found for {document_id}:{index_type}, already deleted")
                 return {"status": "skipped", "reason": "index_record_not_found"}
 
             if db_index.status != DocumentIndexStatus.DELETION_IN_PROGRESS:
-                logger.info(f"Index status changed for {document_id}:{index_type}, current: {db_index.status}, skipping task")
+                logger.info(
+                    f"Index status changed for {document_id}:{index_type}, current: {db_index.status}, skipping task")
                 return {"status": "skipped", "reason": f"status_changed_to_{db_index.status}"}
 
             break
@@ -340,7 +363,8 @@ def delete_index_task(self, document_id: str, index_type: str) -> dict:
             raise Exception(error_msg)
 
         # Handle success callback
-        logger.info(f"Successfully deleted {index_type} index for document {document_id}")
+        logger.info(
+            f"Successfully deleted {index_type} index for document {document_id}")
         self._handle_index_deletion_success(document_id, index_type)
 
         return result.to_dict()
@@ -379,10 +403,12 @@ def update_index_task(self, document_id: str, index_type: str, parsed_data_dict:
     target_version = context.get(f'{index_type}_version')
 
     try:
-        logger.info(f"Starting to update {index_type} index for document {document_id} (v{target_version})")
+        logger.info(
+            f"Starting to update {index_type} index for document {document_id} (v{target_version})")
 
         # Double-check: verify task is still valid
-        skip_reason = _validate_task_relevance(document_id, index_type, target_version, DocumentIndexStatus.CREATING)
+        skip_reason = _validate_task_relevance(
+            document_id, index_type, target_version, DocumentIndexStatus.CREATING)
         if skip_reason:
             return skip_reason
 
@@ -390,7 +416,8 @@ def update_index_task(self, document_id: str, index_type: str, parsed_data_dict:
         parsed_data = ParsedDocumentData.from_dict(parsed_data_dict)
 
         # Execute index update
-        result = document_index_task.update_index(document_id, index_type, parsed_data)
+        result = document_index_task.update_index(
+            document_id, index_type, parsed_data)
 
         # Check if the operation failed and raise exception to trigger retry
         if not result.success:
@@ -399,8 +426,10 @@ def update_index_task(self, document_id: str, index_type: str, parsed_data_dict:
             raise Exception(error_msg)
 
         # Handle success callback with version validation
-        logger.info(f"Successfully updated {index_type} index for document {document_id} (v{target_version})")
-        self._handle_index_success(document_id, index_type, target_version, result.data)
+        logger.info(
+            f"Successfully updated {index_type} index for document {document_id} (v{target_version})")
+        self._handle_index_success(
+            document_id, index_type, target_version, result.data)
 
         return result.to_dict()
 
@@ -415,6 +444,32 @@ def update_index_task(self, document_id: str, index_type: str, parsed_data_dict:
         raise
 
 
+# ========== Helper Tasks for Workflow Orchestration ==========
+
+@current_app.task(bind=True, name='aperag.trigger_chord_after_vision')
+def trigger_chord_after_vision(self, vision_result, document_id: str, other_index_types: List[str], parsed_data_dict: dict, context: dict, all_index_types: List[str]):
+    """Helper task to trigger chord after VISION completes, ignoring vision result"""
+    from celery import chord, group
+    from aperag.tasks.reconciler import IndexAction
+
+    # Create the chord for parallel index creation
+    other_index_tasks = group([
+        create_index_task.s(
+            document_id, index_type, parsed_data_dict, context)
+        for index_type in other_index_types
+    ])
+
+    workflow_chord = chord(
+        other_index_tasks,
+        notify_workflow_complete.s(
+            document_id, IndexAction.CREATE, all_index_types)
+    )
+
+    # Trigger the chord
+    workflow_chord.apply_async()
+    return {'status': 'chord_triggered'}
+
+
 # ========== Dynamic Workflow Orchestration Tasks ==========
 
 @current_app.task(bind=True)
@@ -425,6 +480,9 @@ def trigger_create_indexes_workflow(self, parsed_data_dict: dict, document_id: s
     This task acts as a fan-out point, receiving parsed document data and dynamically
     creating parallel index creation tasks based on the actual parsed content.
 
+    To ensure GRAPH index can use Vision-to-Text content, VISION index is created first,
+    then other indexes (including GRAPH) are created in parallel.
+
     Args:
         parsed_data_dict: Serialized ParsedDocumentData from parse_document_task
         document_id: Document ID to process
@@ -434,24 +492,62 @@ def trigger_create_indexes_workflow(self, parsed_data_dict: dict, document_id: s
         Chord signature for parallel index creation + completion notification
     """
     try:
-        logger.info(f"Triggering parallel index creation for document {document_id} with types: {index_types}")
+        from celery import group, chain, chord
 
-        # Dynamically create parallel index creation tasks
-        parallel_index_tasks = group([
-            create_index_task.s(document_id, index_type, parsed_data_dict, context)
-            for index_type in index_types
-        ])
+        logger.info(
+            f"Triggering index creation for document {document_id} with types: {index_types}")
 
-        # Create a chord that executes the completion notification after all create tasks are done
-        workflow_chord = chord(
-            parallel_index_tasks,
-            notify_workflow_complete.s(document_id, IndexAction.CREATE, index_types)
-        )
+        # Separate VISION from other index types
+        # VISION should complete before GRAPH to ensure vision-to-text content is available
+        vision_index_type = "VISION"
+        other_index_types = [
+            idx_type for idx_type in index_types if idx_type != vision_index_type]
 
-        # Execute the chord
-        workflow_chord.apply_async()
+        if vision_index_type in index_types:
+            # Create VISION index first
+            vision_task = create_index_task.s(
+                document_id, vision_index_type, parsed_data_dict, context)
 
-        return workflow_chord
+            if other_index_types:
+                # After VISION completes, create other indexes in parallel
+                other_index_tasks = group([
+                    create_index_task.s(
+                        document_id, index_type, parsed_data_dict, context)
+                    for index_type in other_index_types
+                ])
+
+                # Chain: VISION -> (other indexes in parallel) -> notification
+                # Use helper task to trigger chord after VISION completes without passing the result
+                workflow_chain = chain(
+                    vision_task,
+                    trigger_chord_after_vision.s(
+                        document_id, other_index_types, parsed_data_dict, context, index_types)
+                )
+            else:
+                # Only VISION index
+                workflow_chain = chain(
+                    vision_task,
+                    notify_workflow_complete.s(
+                        document_id, IndexAction.CREATE, index_types)
+                )
+        else:
+            # No VISION index, create all indexes in parallel (original behavior)
+            parallel_index_tasks = group([
+                create_index_task.s(document_id, index_type,
+                                    parsed_data_dict, context)
+                for index_type in index_types
+            ])
+
+            workflow_chain = chord(
+                parallel_index_tasks,
+                notify_workflow_complete.s(
+                    document_id, IndexAction.CREATE, index_types)
+            )
+
+        # Execute the workflow
+        workflow_chain.apply_async()
+
+        return workflow_chain
 
     except Exception as e:
         error_msg = f"Failed to trigger create indexes workflow: {str(e)}"
@@ -472,7 +568,8 @@ def trigger_delete_indexes_workflow(self, document_id: str, index_types: List[st
         Chord signature for parallel index deletion + completion notification
     """
     try:
-        logger.info(f"Triggering parallel index deletion for document {document_id} with types: {index_types}")
+        logger.info(
+            f"Triggering parallel index deletion for document {document_id} with types: {index_types}")
 
         # Create parallel index deletion tasks
         parallel_delete_tasks = group([
@@ -483,7 +580,8 @@ def trigger_delete_indexes_workflow(self, document_id: str, index_types: List[st
         # Create a chord that executes the completion notification after all delete tasks are done
         workflow_chord = chord(
             parallel_delete_tasks,
-            notify_workflow_complete.s(document_id, IndexAction.DELETE, index_types)
+            notify_workflow_complete.s(
+                document_id, IndexAction.DELETE, index_types)
         )
 
         # Execute the chord
@@ -511,18 +609,21 @@ def trigger_update_indexes_workflow(self, parsed_data_dict: dict, document_id: s
         Chord signature for parallel index update + completion notification
     """
     try:
-        logger.info(f"Triggering parallel index update for document {document_id} with types: {index_types}")
+        logger.info(
+            f"Triggering parallel index update for document {document_id} with types: {index_types}")
 
         # Create parallel index update tasks
         parallel_update_tasks = group([
-            update_index_task.s(document_id, index_type, parsed_data_dict, context)
+            update_index_task.s(document_id, index_type,
+                                parsed_data_dict, context)
             for index_type in index_types
         ])
 
         # Create chord: parallel tasks + completion notification
         workflow_chord = chord(
             parallel_update_tasks,
-            notify_workflow_complete.s(document_id, IndexAction.UPDATE, index_types)
+            notify_workflow_complete.s(
+                document_id, IndexAction.UPDATE, index_types)
         )
 
         chord_async_result = workflow_chord.apply_async()
@@ -553,7 +654,8 @@ def notify_workflow_complete(self, index_results: List[dict], document_id: str, 
         Serialized WorkflowResult
     """
     try:
-        logger.info(f"Workflow {operation} completed for document {document_id}")
+        logger.info(
+            f"Workflow {operation} completed for document {document_id}")
         logger.info(f"Index results: {index_results}")
 
         # Analyze results
@@ -637,7 +739,8 @@ def create_document_indexes_workflow(document_id: str, index_types: List[str], c
     Returns:
         AsyncResult for the workflow chain
     """
-    logger.info(f"Starting create indexes workflow for document {document_id} with types: {index_types}")
+    logger.info(
+        f"Starting create indexes workflow for document {document_id} with types: {index_types}")
     # Create the workflow chain: parse -> dynamic trigger
     workflow_chain = chain(
         parse_document_task.s(document_id, index_types),
@@ -646,7 +749,8 @@ def create_document_indexes_workflow(document_id: str, index_types: List[str], c
 
     # Submit the workflow
     workflow_result = workflow_chain.delay()
-    logger.info(f"Create indexes workflow submitted for document {document_id}, workflow ID: {workflow_result.id}")
+    logger.info(
+        f"Create indexes workflow submitted for document {document_id}, workflow ID: {workflow_result.id}")
 
     return workflow_result
 
@@ -662,11 +766,14 @@ def delete_document_indexes_workflow(document_id: str, index_types: List[str]):
     Returns:
         AsyncResult for the workflow
     """
-    logger.info(f"Starting delete indexes workflow for document {document_id} with types: {index_types}")
+    logger.info(
+        f"Starting delete indexes workflow for document {document_id} with types: {index_types}")
 
     # For deletion, we don't need parsing, so we directly trigger the delete workflow
-    workflow_result = trigger_delete_indexes_workflow.delay(document_id, index_types)
-    logger.info(f"Delete indexes workflow submitted for document {document_id}, workflow ID: {workflow_result.id}")
+    workflow_result = trigger_delete_indexes_workflow.delay(
+        document_id, index_types)
+    logger.info(
+        f"Delete indexes workflow submitted for document {document_id}, workflow ID: {workflow_result.id}")
 
     return workflow_result
 
@@ -687,7 +794,8 @@ def update_document_indexes_workflow(document_id: str, index_types: List[str], c
     Returns:
         AsyncResult for the workflow chain
     """
-    logger.info(f"Starting update indexes workflow for document {document_id} with types: {index_types}")
+    logger.info(
+        f"Starting update indexes workflow for document {document_id} with types: {index_types}")
 
     # Create the workflow chain: parse -> dynamic trigger
     workflow_chain = chain(
@@ -697,7 +805,8 @@ def update_document_indexes_workflow(document_id: str, index_types: List[str], c
 
     # Submit the workflow
     workflow_result = workflow_chain.delay()
-    logger.info(f"Update indexes workflow submitted for document {document_id}, workflow ID: {workflow_result.id}")
+    logger.info(
+        f"Update indexes workflow submitted for document {document_id}, workflow ID: {workflow_result.id}")
 
     return workflow_result
 
@@ -738,7 +847,8 @@ def reconcile_collection_summaries_task():
         logger.info("Collection summary reconciliation completed")
 
     except Exception as e:
-        logger.error(f"Collection summary reconciliation failed: {e}", exc_info=True)
+        logger.error(
+            f"Collection summary reconciliation failed: {e}", exc_info=True)
         raise
 
 
@@ -760,7 +870,8 @@ def collection_delete_task(self, collection_id: str) -> Any:
         return result.to_dict()
 
     except Exception as e:
-        logger.error(f"Collection deletion failed for {collection_id}: {str(e)}")
+        logger.error(
+            f"Collection deletion failed for {collection_id}: {str(e)}")
         raise self.retry(
             exc=e,
             countdown=TaskConfig.RETRY_COUNTDOWN_COLLECTION,
@@ -778,7 +889,8 @@ def collection_init_task(self, collection_id: str, document_user_quota: int) -> 
         document_user_quota: User quota for documents
     """
     try:
-        result = collection_task.initialize_collection(collection_id, document_user_quota)
+        result = collection_task.initialize_collection(
+            collection_id, document_user_quota)
 
         if not result.success:
             raise Exception(result.error)
@@ -787,7 +899,8 @@ def collection_init_task(self, collection_id: str, document_user_quota: int) -> 
         return result.to_dict()
 
     except Exception as e:
-        logger.error(f"Collection initialization failed for {collection_id}: {str(e)}")
+        logger.error(
+            f"Collection initialization failed for {collection_id}: {str(e)}")
         raise self.retry(
             exc=e,
             countdown=TaskConfig.RETRY_COUNTDOWN_COLLECTION,
@@ -807,18 +920,21 @@ def collection_summary_task(self, summary_id: str, collection_id: str, target_ve
     try:
         from aperag.service.collection_summary_service import collection_summary_service
 
-        collection_summary_service.generate_collection_summary_task(summary_id, collection_id, target_version)
+        collection_summary_service.generate_collection_summary_task(
+            summary_id, collection_id, target_version)
 
         logger.info(f"Collection summary task completed for {collection_id}")
         return {"success": True, "collection_id": collection_id}
 
     except Exception as e:
-        logger.error(f"Collection summary generation failed for {collection_id}: {str(e)}")
+        logger.error(
+            f"Collection summary generation failed for {collection_id}: {str(e)}")
 
         # Mark as failed using callback if we've exhausted retries
         if self.request.retries >= self.max_retries:
             from aperag.tasks.reconciler import collection_summary_callbacks
-            collection_summary_callbacks.on_summary_failed(collection_id, str(e))
+            collection_summary_callbacks.on_summary_failed(
+                collection_id, str(e))
 
         raise self.retry(
             exc=e,
@@ -850,6 +966,8 @@ def cleanup_expired_documents_task():
 # in the AsyncEngine connection pool cannot work in the new event loop,
 # which will raise an exception like "xxx attached to a different loop".
 # Therefore, using a dedicated AsyncEngine to avoid issues from connection reuse.
+
+
 @asynccontextmanager
 async def _new_async_engine():
     from aperag.config import new_async_engine
@@ -897,7 +1015,8 @@ def initialize_evaluation_task(self, evaluation_id: str) -> Any:
 
         return {"success": True, "evaluation_id": evaluation_id}
     except Exception as e:
-        logger.error(f"Failed to initialize evaluation {evaluation_id}: {e}", exc_info=True)
+        logger.error(
+            f"Failed to initialize evaluation {evaluation_id}: {e}", exc_info=True)
         raise self.retry(exc=e, countdown=60, max_retries=3)
 
 
@@ -917,7 +1036,8 @@ def process_evaluation_batch_task(self, evaluation_id: str) -> Any:
 
         return {"success": True, "evaluation_id": evaluation_id}
     except Exception as e:
-        logger.error(f"Failed to process batch for evaluation {evaluation_id}: {e}", exc_info=True)
+        logger.error(
+            f"Failed to process batch for evaluation {evaluation_id}: {e}", exc_info=True)
         raise self.retry(exc=e, countdown=60, max_retries=3)
 
 

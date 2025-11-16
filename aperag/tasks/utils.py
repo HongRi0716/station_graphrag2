@@ -64,7 +64,8 @@ def parse_document_content(document, collection) -> Tuple[str, List[Any], Any]:
                                 part.metadata["document_id"] = document.id
                             else:
                                 # Create metadata if it doesn't exist
-                                part.metadata = {"chat_id": chat_id, "document_id": document.id}
+                                part.metadata = {
+                                    "chat_id": chat_id, "document_id": document.id}
             except json.JSONDecodeError:
                 pass
 
@@ -92,7 +93,8 @@ def get_document_and_collection(document_id: str, ignore_deleted: bool = True):
     if not document:
         raise DocumentNotFoundException(document_id)
 
-    collection = db_ops.query_collection_by_id(document.collection_id, ignore_deleted)
+    collection = db_ops.query_collection_by_id(
+        document.collection_id, ignore_deleted)
     if not collection:
         raise CollectionNotFoundException(document.collection_id)
 

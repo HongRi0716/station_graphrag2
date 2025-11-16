@@ -484,7 +484,7 @@ export const ChatInput = ({
                 <FileUpload
                   maxFiles={10}
                   maxSize={10 * 1024 * 1024}
-                  accept=".pdf,.doc,.docx,.txt,.md,.ppt,.pptx,.xls,.xlsx"
+                  accept=".pdf,.doc,.docx,.txt,.md,.ppt,.pptx,.xls,.xlsx,.jpg,.jpeg,.png,.bmp,.tiff,.tif,image/*"
                   value={attachments.map((f) => f.file)}
                   onFileReject={onFileReject}
                   onFileValidate={onFileValidate}

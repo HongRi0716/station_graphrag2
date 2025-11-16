@@ -34,12 +34,14 @@ load_dotenv(os.path.join(BASE_DIR, ".env"), verbose=True)
 
 
 class S3Config(BaseSettings):
-    endpoint: str = Field("http://127.0.0.1:9000", alias="OBJECT_STORE_S3_ENDPOINT")
+    endpoint: str = Field("http://127.0.0.1:9000",
+                          alias="OBJECT_STORE_S3_ENDPOINT")
     access_key: str = Field("minioadmin", alias="OBJECT_STORE_S3_ACCESS_KEY")
     secret_key: str = Field("minioadmin", alias="OBJECT_STORE_S3_SECRET_KEY")
     bucket: str = Field("aperag", alias="OBJECT_STORE_S3_BUCKET")
     region: Optional[str] = Field(None, alias="OBJECT_STORE_S3_REGION")
-    prefix_path: Optional[str] = Field(None, alias="OBJECT_STORE_S3_PREFIX_PATH")
+    prefix_path: Optional[str] = Field(
+        None, alias="OBJECT_STORE_S3_PREFIX_PATH")
     use_path_style: bool = Field(True, alias="OBJECT_STORE_S3_USE_PATH_STYLE")
 
 
@@ -84,11 +86,14 @@ class Config(BaseSettings):
     # Auth
     auth_type: str = Field("none", alias="AUTH_TYPE")
     jwt_secret: str = Field("SECRET", alias="JWT_SECRET")
-    oauth_redirect_url: str = Field("http://localhost:3000/auth/callback", alias="OAUTH_REDIRECT_URL")
+    oauth_redirect_url: str = Field(
+        "http://localhost:3000/auth/callback", alias="OAUTH_REDIRECT_URL")
     google_oauth_client_id: str = Field("", alias="GOOGLE_OAUTH_CLIENT_ID")
-    google_oauth_client_secret: str = Field("", alias="GOOGLE_OAUTH_CLIENT_SECRET")
+    google_oauth_client_secret: str = Field(
+        "", alias="GOOGLE_OAUTH_CLIENT_SECRET")
     github_oauth_client_id: str = Field("", alias="GITHUB_OAUTH_CLIENT_ID")
-    github_oauth_client_secret: str = Field("", alias="GITHUB_OAUTH_CLIENT_SECRET")
+    github_oauth_client_secret: str = Field(
+        "", alias="GITHUB_OAUTH_CLIENT_SECRET")
     auth0_domain: str = Field("aperag-dev.auting.cn", alias="AUTH0_DOMAIN")
     auth0_client_id: str = Field("", alias="AUTH0_CLIENT_ID")
     authing_domain: str = Field("aperag.authing.cn", alias="AUTHING_DOMAIN")
@@ -110,7 +115,8 @@ class Config(BaseSettings):
     model_configs: Dict[str, Any] = {}
 
     # Embedding
-    embedding_max_chunks_in_batch: int = Field(10, alias="EMBEDDING_MAX_CHUNKS_IN_BATCH")
+    embedding_max_chunks_in_batch: int = Field(
+        10, alias="EMBEDDING_MAX_CHUNKS_IN_BATCH")
 
     # Memory backend
     memory_redis_url: Optional[str] = Field(None, alias="MEMORY_REDIS_URL")
@@ -130,7 +136,8 @@ class Config(BaseSettings):
     max_bot_count: int = Field(10, alias="MAX_BOT_COUNT")
     max_collection_count: int = Field(50, alias="MAX_COLLECTION_COUNT")
     max_document_count: int = Field(1000, alias="MAX_DOCUMENT_COUNT")
-    max_document_size: int = Field(100 * 1024 * 1024, alias="MAX_DOCUMENT_SIZE")
+    max_document_size: int = Field(
+        100 * 1024 * 1024, alias="MAX_DOCUMENT_SIZE")
     max_conversation_count: int = Field(100, alias="MAX_CONVERSATION_COUNT")
 
     # Chunking
@@ -139,12 +146,16 @@ class Config(BaseSettings):
 
     # Fulltext search
     es_host: Optional[str] = Field(None, alias="ES_HOST")
-    es_timeout: int = Field(30, alias="ES_TIMEOUT")  # ES request timeout in seconds
-    es_max_retries: int = Field(3, alias="ES_MAX_RETRIES")  # Max retries for ES requests
+    # ES request timeout in seconds
+    es_timeout: int = Field(30, alias="ES_TIMEOUT")
+    # Max retries for ES requests
+    es_max_retries: int = Field(3, alias="ES_MAX_RETRIES")
 
     # LLM keyword extraction
-    llm_keyword_extraction_provider: str = Field("", alias="LLM_KEYWORD_EXTRACTION_PROVIDER")
-    llm_keyword_extraction_model: str = Field("", alias="LLM_KEYWORD_EXTRACTION_MODEL")
+    llm_keyword_extraction_provider: str = Field(
+        "", alias="LLM_KEYWORD_EXTRACTION_PROVIDER")
+    llm_keyword_extraction_model: str = Field(
+        "", alias="LLM_KEYWORD_EXTRACTION_MODEL")
 
     # Qianfan
     qianfan_api_key: str = Field("", alias="QIANFAN_API_KEY")
@@ -154,6 +165,18 @@ class Config(BaseSettings):
     whisper_host: str = Field("", alias="WHISPER_HOST")
     paddleocr_host: str = Field("", alias="PADDLEOCR_HOST")
     docray_host: str = Field("", alias="DOCRAY_HOST")
+    # Control whether to use OCR for image files (default: False, use Vision-to-Text instead)
+    ocr_enabled: bool = Field(False, alias="OCR_ENABLED")
+    siliconflow_ocr_enabled: bool = Field(
+        False, alias="SILICONFLOW_OCR_ENABLED")
+
+    # SiliconFlow OCR
+    siliconflow_ocr_provider: str = Field("", alias="SILICONFLOW_OCR_PROVIDER")
+    siliconflow_ocr_model: str = Field(
+        "Pro/Qwen/Qwen2.5-VL-7B-Instruct", alias="SILICONFLOW_OCR_MODEL")
+    siliconflow_ocr_base_url: str = Field(
+        "https://api.siliconflow.cn/v1", alias="SILICONFLOW_OCR_BASE_URL")
+    siliconflow_ocr_api_key: str = Field("", alias="SILICONFLOW_OCR_API_KEY")
 
     # Register mode
     register_mode: str = Field("unlimited", alias="REGISTER_MODE")
@@ -174,7 +197,8 @@ class Config(BaseSettings):
     jaeger_endpoint: Optional[str] = Field(None, alias="JAEGER_ENDPOINT")
     otel_console_enabled: bool = Field(False, alias="OTEL_CONSOLE_ENABLED")
     otel_fastapi_enabled: bool = Field(True, alias="OTEL_FASTAPI_ENABLED")
-    otel_sqlalchemy_enabled: bool = Field(True, alias="OTEL_SQLALCHEMY_ENABLED")
+    otel_sqlalchemy_enabled: bool = Field(
+        True, alias="OTEL_SQLALCHEMY_ENABLED")
     otel_mcp_enabled: bool = Field(True, alias="OTEL_MCP_ENABLED")
 
     def __init__(self, **kwargs):
@@ -284,7 +308,8 @@ sync_engine = new_sync_engine()
 async def get_async_session(engine=None) -> AsyncGenerator[AsyncSession, None]:
     if engine is None:
         engine = async_engine
-    async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    async_session = sessionmaker(
+        engine, class_=AsyncSession, expire_on_commit=False)
     async with async_session() as session:
         yield session
 

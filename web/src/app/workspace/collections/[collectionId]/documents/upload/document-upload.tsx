@@ -81,18 +81,42 @@ export const DocumentUpload = () => {
 
   const handleSaveToCollection = useCallback(async () => {
     if (!collection.id) return;
-    const res =
-      await apiClient.defaultApi.collectionsCollectionIdDocumentsConfirmPost({
-        collectionId: collection.id,
-        confirmDocumentsRequest: {
-          document_ids: documents
-            .map((doc) => doc.document_id || '')
-            .filter((id) => !_.isEmpty(id)),
-        },
-      });
-    if (res.status === 200) {
-      toast.success('Document added successfully');
-      router.push(`/workspace/collections/${collection.id}/documents`);
+    try {
+      const res =
+        await apiClient.defaultApi.collectionsCollectionIdDocumentsConfirmPost({
+          collectionId: collection.id,
+          confirmDocumentsRequest: {
+            document_ids: documents
+              .map((doc) => doc.document_id || '')
+              .filter((id) => !_.isEmpty(id)),
+          },
+        });
+      if (res.status === 200) {
+        if (res.data.failed_count && res.data.failed_count > 0) {
+          const failedNames =
+            res.data.failed_documents
+              ?.map((doc) => doc.name || doc.document_id)
+              .join(', ') || 'some documents';
+          toast.error(
+            `Failed to add ${res.data.failed_count} document(s): ${failedNames}`,
+          );
+        }
+        if (res.data.confirmed_count > 0) {
+          toast.success(
+            `${res.data.confirmed_count} document(s) added successfully`,
+          );
+          router.push(`/workspace/collections/${collection.id}/documents`);
+        } else if (res.data.failed_count === 0) {
+          toast.success('Document added successfully');
+          router.push(`/workspace/collections/${collection.id}/documents`);
+        }
+      }
+    } catch (error: any) {
+      const errorMessage =
+        error?.response?.data?.detail ||
+        error?.message ||
+        'Failed to confirm documents';
+      toast.error(`Failed to save documents: ${errorMessage}`);
     }
   }, [collection.id, documents, router]);
 
@@ -380,7 +404,7 @@ export const DocumentUpload = () => {
         maxFiles={1000}
         maxSize={10 * 1024 * 1024}
         className="w-full gap-4"
-        accept=".pdf,.doc,.docx,.txt,.md,.ppt,.pptx,.xls,.xlsx"
+        accept=".pdf,.doc,.docx,.txt,.md,.ppt,.pptx,.xls,.xlsx,.jpg,.jpeg,.png,.bmp,.tiff,.tif,image/*"
         value={documents.map((f) => f.file)}
         onValueChange={(files) => {
           setDocuments((docs) => {
