@@ -37,11 +37,15 @@ services:
       - "8000:8000"
     command: ["/app/scripts/entrypoint.sh", "/app/scripts/start-api.sh"]
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || curl -f http://localhost:8000/docs || exit 1"]
+      test:
+        [
+          "CMD-SHELL",
+          "curl -f http://localhost:8000/health || curl -f http://localhost:8000/docs || exit 1",
+        ]
       interval: 10s
       timeout: 5s
-      retries: 12  # 12 * 10s = 120s (2 minutes)
-      start_period: 30s  # Give API time to start up before first check
+      retries: 12 # 12 * 10s = 120s (2 minutes)
+      start_period: 30s # Give API time to start up before first check
 
   frontend:
     build:
@@ -75,10 +79,13 @@ services:
         condition: service_healthy
       es:
         condition: service_healthy
+      docray:
+        condition: service_healthy
     volumes:
       - ~/.cache:/root/.cache
       - ./resources:/data/resources
       - aperag-shared-data:/shared
+      - ./aperag:/app/aperag # 挂载代码目录，修改代码后重启容器即可生效
     env_file:
       - .env
       - envs/docker.env.overrides
@@ -86,7 +93,8 @@ services:
       - NODE_IP=aperag-celeryworker
       - DOCRAY_HOST=${DOCRAY_HOST}
       - APERAG_API_BASE_URL=http://aperag-api:8000
-    command: ["/app/scripts/entrypoint.sh", "/app/scripts/start-celery-worker.sh"]
+    command:
+      ["/app/scripts/entrypoint.sh", "/app/scripts/start-celery-worker.sh"]
 
   celerybeat:
     image: ${REGISTRY:-docker.io}/apecloud/aperag:${VERSION:-v0.0.0-nightly}
@@ -124,7 +132,8 @@ services:
       - "5555:5555"
     environment:
       - NODE_IP=aperag-flower
-    command: ["/app/scripts/entrypoint.sh", "/app/scripts/start-celery-flower.sh"]
+    command:
+      ["/app/scripts/entrypoint.sh", "/app/scripts/start-celery-flower.sh"]
 
   # ==============================================
   # Infrastructure Services (always available)
@@ -169,7 +178,11 @@ services:
     ports:
       - "6333:6333"
     healthcheck:
-      test: ["CMD-SHELL", "nc -z localhost 6333 || timeout 3 bash -c '</dev/tcp/localhost/6333' || exit 1"]
+      test:
+        [
+          "CMD-SHELL",
+          "nc -z localhost 6333 || timeout 3 bash -c '</dev/tcp/localhost/6333' || exit 1",
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -200,11 +213,11 @@ services:
     image: jaegertracing/all-in-one:1.60
     container_name: aperag-jaeger
     ports:
-      - "16686:16686"  # Jaeger UI
-      - "14268:14268"  # HTTP collector
-      - "14250:14250"  # gRPC collector
-      - "6831:6831/udp"  # UDP agent
-      - "6832:6832/udp"  # UDP agent
+      - "16686:16686" # Jaeger UI
+      - "14268:14268" # HTTP collector
+      - "14250:14250" # gRPC collector
+      - "6831:6831/udp" # UDP agent
+      - "6832:6832/udp" # UDP agent
     environment:
       - COLLECTOR_OTLP_ENABLED=true
       - LOG_LEVEL=info
@@ -218,8 +231,8 @@ services:
     image: neo4j:5.26.5-enterprise
     container_name: aperag-neo4j
     ports:
-      - "7474:7474"  # HTTP
-      - "7687:7687"  # Bolt
+      - "7474:7474" # HTTP
+      - "7687:7687" # Bolt
     environment:
       - NEO4J_AUTH=neo4j/password
       - NEO4J_PLUGINS=["apoc"]
@@ -238,9 +251,20 @@ services:
     ports:
       - "8265:8265"
       - "8639:8639"
-    profiles: ["docray"]
     environment:
       - STANDALONE_MODE=true
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import socket; s = socket.socket(); s.connect(('localhost', 8639)); s.close()",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
     deploy:
       resources:
         reservations:

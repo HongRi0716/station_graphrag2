@@ -80,13 +80,46 @@ def _get_vision_llm_completion_service(collection: Collection):
         # Use provider's base_url if available, otherwise use environment variable
         base_url = llm_provider.base_url or vision_llm_base_url
 
-        # Create completion service with vision=True flag
+        # Get model configuration to determine max_output_tokens
+        max_tokens = None
+        try:
+            from aperag.db.models import APIType
+            model_config = db_ops.query_llm_provider_model(
+                provider_name=vision_llm_provider,
+                api=APIType.COMPLETION,
+                model=vision_llm_model
+            )
+            if model_config and model_config.max_output_tokens:
+                # Use max_output_tokens from model config, with a reasonable default if too small
+                # At least 8192 tokens for complex diagrams
+                max_tokens = max(model_config.max_output_tokens, 8192)
+                logger.info(
+                    f"Using max_output_tokens={max_tokens} for Vision LLM {vision_llm_model} "
+                    f"(from model config: {model_config.max_output_tokens})")
+            else:
+                # Default to 16384 tokens for vision-to-text (complex diagrams need more tokens)
+                max_tokens = 16384
+                logger.info(
+                    f"Using default max_tokens={max_tokens} for Vision LLM {vision_llm_model} "
+                    f"(model config not found or max_output_tokens not set)")
+        except Exception as e:
+            # Fallback to default if query fails
+            max_tokens = 16384
+            logger.warning(
+                f"Failed to get max_output_tokens for Vision LLM {vision_llm_model}: {e}. "
+                f"Using default max_tokens={max_tokens}")
+
+        # Create completion service with vision=True flag, max_tokens, and timeout
+        # Vision models need longer timeout (10 minutes) for complex image processing
         completion_service = CompletionService(
             provider=llm_provider.completion_dialect or "openai",
             model=vision_llm_model,
             base_url=base_url,
             api_key=api_key,
             vision=True,  # Explicitly mark as vision model
+            max_tokens=max_tokens,  # Set max_tokens to allow longer outputs
+            # 10 minutes timeout for vision models (complex images take longer)
+            timeout=600,
         )
 
         return completion_service
@@ -217,110 +250,35 @@ class VisionIndexer(BaseIndexer):
                     mime_type = part.mime_type or "image/png"
                     data_uri = f"data:{mime_type};base64,{b64_image}"
 
-                    prompt = """Extract image content with high fidelity. Use Markdown. **CRITICAL: Be concise, group items, use natural language for relationships, optimize for RAG.**
+                    prompt = """Extract key information from the image for RAG retrieval and knowledge graph extraction. Focus on precise entity and relationship extraction.
+## Requirements
+1. **Entities (Equipment & Components)**: Extract ALL unique entities with clear identification
 
-**1. Content Type**: Pure Diagram / Pure Document / Mixed Content / Hybrid Page
-
-**2. Overall Summary**: One paragraph. For electrical diagrams: facility name, voltage levels, date, topology. For documents: category, key topics.
-
-**3. Text Extraction**: Extract ALL text labels, names, identifiers. Preserve original language and reading order. Use Markdown, LaTeX for formulas (`$$...$$`), GFM for tables.
-
-**4. Specialized Analysis**:
-
-**For Electrical Single-Line Diagrams (主接线图)**:
-- **System Overview**: Facility name, voltage levels (e.g., 500kV/220kV/35kV), date, topology (e.g., "双主变配置"), main transformer voltage ratios
-  
-- **Voltage Level Sections** (describe each separately):
-  - **500kV**: Busbars, lines (full names), circuit breakers (all IDs), connections to transformers
-  - **220kV**: All busbars, all lines (full names), circuit breakers/disconnectors (all IDs), connections
-  - **35kV**: Busbars, station service transformers (站用变, all numbers), reactors (低抗, with associations), lines, all component IDs
-
-- **Key Equipment** (comprehensive, use ranges only when >20 items):
-  - Main Transformers: All with voltage ratios
-  - Circuit Breakers: Grouped by voltage, list all IDs (use ranges if >20)
-  - Busbars: All full names
-  - Lines: All line names grouped by voltage
-  - Station Service Transformers: All (0号/1号/2号站用变)
-  - Reactors: All with associations (e.g., "1号主变1号低抗")
-  - Other: Disconnectors, CTs, VTs, grounding switches
-
-- **Connection Relationships** (natural language, complete):
-  - Main Transformer Connections: How each connects to voltage levels (e.g., "1号主变高压侧通过断路器50132连接500kV I母，中压侧通过断路器20140连接220kV IB母，低压侧连接35kV I母")
-  - Line Connections: Connection paths for major lines (e.g., "汤州5354线通过断路器5013、隔离开关50132连接500kV I母")
-  - Busbar Connections: How busbars connect to transformers and lines
-  - Power Flow: Complete flow from input to output (e.g., "500kV进线→500kV母线→主变→220kV母线→220kV出线，同时主变→35kV母线→站用变/35kV出线")
-  - Redundancy: Backup paths and redundancy configuration
-  - Equipment Associations: Which equipment belongs to which line
-
-- **Component Identifiers**: Extract all numerical IDs, group by equipment type, note naming patterns
-
-**For Other Diagram Types**: Adapt structure to diagram type
-
-**Document/Text/Table/Chart Regions**: Structure, key terms, main content, relationships
-
-**5. Object Recognition**: List significant objects/entities (grouped, no repetition)
-
-**Output Format:**
-```markdown
-## Content Type: [type]
-
-## Overall Summary
-[Facility name, voltage levels, date, topology]
-
-## Detailed Text Extraction
-[ALL text labels, names, identifiers]
-
-## Diagram Regions (if applicable)
-### Diagram 1: [Type/Title]
-**System Overview**: [Facility, voltages, date, topology]
-
-**Voltage Level Sections**:
-- **500kV**: [Busbars, lines, equipment, connections]
-- **220kV**: [Busbars, lines, equipment, connections]
-- **35kV**: [Busbars, lines, equipment, connections]
-
-**Key Equipment**: 
-- Main Transformers: [all with ratios]
-- Circuit Breakers: [grouped by voltage, all IDs]
-- Busbars: [all names]
-- Lines: [all names by voltage]
-- Station Service Transformers: [all]
-- Reactors: [all with associations]
-- Other: [disconnectors, CTs, VTs, etc.]
-
-**Connection Relationships**: 
-- Main Transformer Connections: [how each connects]
-- Line Connections: [paths for major lines]
-- Busbar Connections: [how busbars connect]
-- Power Flow: [complete flow description]
-- Redundancy: [backup paths]
-- Equipment Associations: [equipment-line mappings]
-
-**Component Identifiers**: [All IDs grouped by type]
-
-## Document/Table/Chart Regions (if applicable)
-[Structured content]
-
-## Object Recognition
-[Grouped list]
-```
-
-**Rules**: 
-- Max 3000 words (balance completeness and efficiency)
-- Extract ALL equipment names, line names, identifiers - completeness critical
-- Group using ranges only when >20 items of same type
-- Natural language for relationships (no symbols)
-- Prioritize relationships, but list all key equipment
-- No repetition, ensure nothing missed
-- For electrical diagrams: complete extraction of all components and connections"""
+2. **Relationships**: Extract ALL connection relationships with explicit entity pairs:
+   - **Format**: Use clear subject-verb-object structure: "EntityA connects to EntityB" or "EntityA通过EntityB连接到EntityC"
+   - **Relationship Types**: connects_to, passes_through, supplies, receives_from, controls, etc.
+   - **Be explicit**: Always mention both entity names in each relationship
+## Rules
+- **Complete extraction** - extract all entities and relationships, no omissions
+- **No duplicates** - each entity and relationship appears only once
+- **Entity naming**: Use exact names/IDs as shown in the image, preserve original language
+- **Relationship clarity**: Each relationship must explicitly mention both entities
+- **Structured format**: Use consistent format for easy parsing"""
 
                     description = None
                     max_retries = 3
                     retry_delay = 5  # seconds
+                    logger.info(
+                        f"Starting Vision LLM generation for asset {part.asset_id} of document {document_id} "
+                        f"(attempt 1/{max_retries})")
                     for attempt in range(max_retries):
                         try:
+                            logger.info(
+                                f"Calling Vision LLM generate() for asset {part.asset_id} (attempt {attempt + 1}/{max_retries})")
                             description = completion_svc.generate(
                                 history=[], prompt=prompt, images=[data_uri])
+                            logger.info(
+                                f"Vision LLM generate() completed for asset {part.asset_id}, description length: {len(description) if description else 0}")
                             break  # Success
                         except LLMError as e:
                             if attempt < max_retries - 1 and is_retryable_error(e):

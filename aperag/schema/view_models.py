@@ -930,6 +930,32 @@ class SearchResultItem(BaseModel):
     )
 
 
+class GlobalEvidence(BaseModel):
+    """
+    全局证据对象：用于封装跨 Collection 检索到的碎片信息。
+    这是联邦搜索层向 Agent 层传递的标准数据单元。
+    """
+
+    source_collection_id: str = Field(..., description='来源知识库ID')
+    source_collection_name: str = Field(
+        ..., description="来源知识库名称 (例如: '变电安规')"
+    )
+    document_id: str = Field(..., description='原始文档ID')
+    document_name: str = Field(..., description='原始文档名称')
+    chunk_text: str = Field(..., description='检索到的文本切片内容')
+    relevance_score: float = Field(
+        0.0, description='相关性得分 (0-1)'
+    )
+    entity_names: list[str] = Field(
+        default_factory=list, description='切片中包含的关键实体'
+    )
+    graph_context: Optional[dict[str, Any]] = Field(
+        default=None, description='关联的图谱子图 (Nodes/Edges)'
+    )
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
 class SearchResult(BaseModel):
     id: Optional[str] = Field(None, description='The id of the search result')
     query: Optional[str] = None

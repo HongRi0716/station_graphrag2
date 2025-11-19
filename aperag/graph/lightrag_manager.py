@@ -145,7 +145,7 @@ def delete_document_for_celery(collection: Collection, doc_id: str) -> Dict[str,
 async def _enrich_content_with_vision_analysis(
     collection: Collection,
     doc_id: str,
-    max_wait_time: int = 120,
+    max_wait_time: int | None = None,
     check_interval: int = 2,
 ) -> str:
     """
@@ -157,7 +157,8 @@ async def _enrich_content_with_vision_analysis(
     Args:
         collection: Collection object
         doc_id: Document ID
-        max_wait_time: Maximum time to wait for Vision index to complete (seconds)
+        max_wait_time: Maximum time to wait for Vision index to complete (seconds).
+                      If None, will wait indefinitely until Vision index completes.
         check_interval: Interval between status checks (seconds)
 
     Returns:
@@ -177,7 +178,8 @@ async def _enrich_content_with_vision_analysis(
         waited_time = 0
 
         vision_ready = False
-        while waited_time < max_wait_time and not vision_ready:
+        # Wait indefinitely if max_wait_time is None, otherwise respect the timeout
+        while (max_wait_time is None or waited_time < max_wait_time) and not vision_ready:
             for session in get_sync_session():
                 stmt = select(DocumentIndex).where(
                     and_(
@@ -204,9 +206,14 @@ async def _enrich_content_with_vision_analysis(
                 if doc_index.status in [DocumentIndexStatus.PENDING, DocumentIndexStatus.CREATING]:
                     # Log every 10 seconds or on first check
                     if waited_time == 0 or waited_time % 10 == 0:
-                        logger.info(
-                            f"Vision index for document {doc_id} is still in progress ({status_str}), "
-                            f"waited {waited_time}s / {max_wait_time}s, continuing to wait...")
+                        if max_wait_time is None:
+                            logger.info(
+                                f"Vision index for document {doc_id} is still in progress ({status_str}), "
+                                f"waited {waited_time}s, continuing to wait indefinitely...")
+                        else:
+                            logger.info(
+                                f"Vision index for document {doc_id} is still in progress ({status_str}), "
+                                f"waited {waited_time}s / {max_wait_time}s, continuing to wait...")
                     await asyncio.sleep(check_interval)
                     waited_time += check_interval
                     break  # Break inner loop to retry
@@ -262,8 +269,8 @@ async def _enrich_content_with_vision_analysis(
                 # If we didn't break, continue waiting
                 continue
 
-        # Check if we timed out
-        if waited_time >= max_wait_time:
+        # Check if we timed out (only if max_wait_time is set)
+        if max_wait_time is not None and waited_time >= max_wait_time:
             logger.warning(
                 f"Timeout waiting for Vision index to complete for document {doc_id} after {max_wait_time}s")
             return ""

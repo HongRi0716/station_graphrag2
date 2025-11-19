@@ -168,3 +168,97 @@ local-storage
 cursorplans
 celerybeat-schedule.db
 frontend/node_modules/
+
+# Large files - 大文件
+# Images (uncomment if you don't want to track images)
+# *.png
+# *.jpg
+# *.jpeg
+# *.gif
+# *.bmp
+# *.ico
+# *.svg
+# *.webp
+
+# Large documents (uncomment if you don't want to track documents)
+# *.pdf
+# *.docx
+# *.doc
+# *.xlsx
+# *.xls
+# *.pptx
+# *.ppt
+
+# Video and audio files
+*.mp4
+*.avi
+*.mov
+*.wmv
+*.flv
+*.webm
+*.mkv
+*.mp3
+*.wav
+*.flac
+*.aac
+
+# Large data files
+*.csv
+*.tsv
+*.parquet
+*.h5
+*.hdf5
+*.pkl
+*.pickle
+*.joblib
+
+# Model files (uncomment if you don't want to track model files)
+# *.pt
+# *.pth
+# *.ckpt
+# *.safetensors
+# *.onnx
+# *.pb
+# *.tflite
+
+# Large test data files
+tests/**/test_data/
+tests/**/*_test_data.json
+tests/**/*_test_data.csv
+tests/**/*_test_data.pkl
+# Specific large test files
+tests/e2e_test/graphstorage/graph_storage_test_data.json
+
+# Temporary output files
+*.txt
+!README*.txt
+!CHANGELOG*.txt
+!LICENSE*.txt
+vision_content*.txt
+new_vision_content*.txt
+vision_prompt*.txt
+
+# Large log files
+*.log.*
+*.log.gz
+*.log.zip
+
+# Archive files
+*.zip
+*.tar
+*.tar.gz
+*.rar
+*.7z
+*.gz
+*.bz2
+*.xz
+
+# Database dumps
+*.sql.gz
+*.dump
+*.backup
+
+# Large JSON files (test data, exports, etc.)
+*_export.json
+*_backup.json
+*_dump.json

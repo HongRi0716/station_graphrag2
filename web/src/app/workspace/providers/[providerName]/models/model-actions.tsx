@@ -35,7 +35,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { apiClient } from '@/lib/api/client';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Slot } from '@radix-ui/react-slot';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, Eye } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useRouter } from 'next/navigation';
 import { useCallback, useState } from 'react';
@@ -47,6 +47,8 @@ import * as z from 'zod';
 const defaultValue = {
   model: '',
   api: LlmProviderModelCreateApiEnum.completion,
+  apiTypeDisplay: 'completion',
+  tags: [],
 };
 
 const providers = [
@@ -91,10 +93,12 @@ const providers = [
 const modelSchema = z.object({
   model: z.string().min(1),
   api: z.string().min(1),
+  apiTypeDisplay: z.string().optional(), // For UI display: 'completion', 'vision', 'embedding', 'rerank'
   custom_llm_provider: z.string().min(1),
   context_window: z.coerce.number<number>().optional(),
   max_input_tokens: z.coerce.number<number>().optional(),
   max_output_tokens: z.coerce.number<number>().optional(),
+  tags: z.array(z.string()).optional(),
 });
 
 export const ModelActions = ({
@@ -122,6 +126,15 @@ export const ModelActions = ({
     defaultValues: {
       ...defaultValue,
       ...model,
+      // Determine display type: if model has vision tag and is completion, show as vision
+      apiTypeDisplay:
+        model?.tags?.includes('vision') && model?.api === 'completion'
+          ? 'vision'
+          : model?.api || 'completion',
+      // Preserve existing tags
+      tags: model?.tags || [],
+      // Ensure api field is set correctly
+      api: model?.api || LlmProviderModelCreateApiEnum.completion,
     },
   });
 
@@ -145,6 +158,24 @@ export const ModelActions = ({
   const handleCreateOrUpdate = useCallback(
     async (values: z.infer<typeof modelSchema>) => {
       let res;
+      // Determine actual API type and tags
+      const apiTypeDisplay = values.apiTypeDisplay || values.api;
+      const isVision = apiTypeDisplay === 'vision';
+      // Use apiTypeDisplay directly, not values.api, to ensure correct API type
+      const actualApi = isVision ? 'completion' : apiTypeDisplay || values.api;
+
+      // Handle tags: add vision tag if vision selected, remove if not
+      let tags = values.tags || [];
+      if (isVision) {
+        // Add vision tag if not present
+        if (!tags.includes('vision')) {
+          tags = [...tags, 'vision'];
+        }
+      } else {
+        // Remove vision tag if present
+        tags = tags.filter((tag) => tag !== 'vision');
+      }
+
       if (action === 'edit' && model?.model) {
         res =
           await apiClient.defaultApi.llmProvidersProviderNameModelsApiModelPut({
@@ -156,6 +187,7 @@ export const ModelActions = ({
               context_window: values.context_window,
               max_input_tokens: values.max_input_tokens,
               max_output_tokens: values.max_output_tokens,
+              tags: tags,
             },
           });
       }
@@ -164,12 +196,13 @@ export const ModelActions = ({
           providerName: provider.name,
           llmProviderModelCreate: {
             provider_name: provider.name,
-            api: values.api as LlmProviderModelCreateApiEnum,
+            api: actualApi as LlmProviderModelCreateApiEnum,
             model: values.model,
             custom_llm_provider: values.custom_llm_provider,
             context_window: values.context_window,
             max_input_tokens: values.max_input_tokens,
             max_output_tokens: values.max_output_tokens,
+            tags: tags,
           },
         });
       }
@@ -268,22 +301,19 @@ export const ModelActions = ({
               />
               <FormField
                 control={form.control}
-                name="api"
+                name="apiTypeDisplay"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>{page_models('model.api_type')}</FormLabel>
                     <FormControl>
                       <RadioGroup
-                        className="grid grid-cols-3 gap-4"
+                        className="grid grid-cols-4 gap-4"
                         onValueChange={field.onChange}
                         disabled={model !== undefined}
-                        {...field}
+                        value={field.value || 'completion'}
                       >
                         <div className="bg-card flex h-9 items-center gap-3 rounded-md border px-3">
-                          <RadioGroupItem
-                            value={LlmProviderModelCreateApiEnum.completion}
-                            id="completion"
-                          />
+                          <RadioGroupItem value="completion" id="completion" />
                           <Label
                             htmlFor="completion"
                             className={
@@ -294,10 +324,19 @@ export const ModelActions = ({
                           </Label>
                         </div>
                         <div className="bg-card flex h-9 items-center gap-3 rounded-md border px-3">
-                          <RadioGroupItem
-                            value={LlmProviderModelCreateApiEnum.embedding}
-                            id="embedding"
-                          />
+                          <RadioGroupItem value="vision" id="vision" />
+                          <Label
+                            htmlFor="vision"
+                            className={
+                              model == undefined ? '' : 'text-muted-foreground'
+                            }
+                          >
+                            <Eye className="mr-1 inline size-4" />
+                            Vision
+                          </Label>
+                        </div>
+                        <div className="bg-card flex h-9 items-center gap-3 rounded-md border px-3">
+                          <RadioGroupItem value="embedding" id="embedding" />
                           <Label
                             htmlFor="embedding"
                             className={
@@ -308,10 +347,7 @@ export const ModelActions = ({
                           </Label>
                         </div>
                         <div className="bg-card flex h-9 items-center gap-3 rounded-md border px-3">
-                          <RadioGroupItem
-                            value={LlmProviderModelCreateApiEnum.rerank}
-                            id="rerank"
-                          />
+                          <RadioGroupItem value="rerank" id="rerank" />
                           <Label
                             htmlFor="rerank"
                             className={
@@ -325,6 +361,18 @@ export const ModelActions = ({
                     </FormControl>
                   </FormItem>
                 )}
+              />
+              {/* Hidden field to sync api with apiTypeDisplay */}
+              <FormField
+                control={form.control}
+                name="api"
+                render={({ field }) => {
+                  const apiTypeDisplay =
+                    form.watch('apiTypeDisplay') || 'completion';
+                  const actualApi =
+                    apiTypeDisplay === 'vision' ? 'completion' : apiTypeDisplay;
+                  return <input type="hidden" {...field} value={actualApi} />;
+                }}
               />
               <FormField
                 control={form.control}

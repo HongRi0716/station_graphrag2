@@ -36,6 +36,7 @@ class CompletionService:
         max_tokens: Optional[int] = None,
         vision: bool = False,
         caching: bool = True,
+        timeout: Optional[int] = None,
     ):
         super().__init__()
         self.provider = provider
@@ -46,6 +47,9 @@ class CompletionService:
         self.max_tokens = max_tokens
         self.vision = vision
         self.caching = caching
+        # Default timeout: 10 minutes for vision models (complex images take longer), 5 minutes for others
+        self.timeout = timeout if timeout is not None else (
+            600 if vision else 300)
 
     def is_vision_model(self) -> bool:
         return self.vision
@@ -109,6 +113,7 @@ class CompletionService:
                 messages=messages,
                 stream=False,
                 caching=self.caching,
+                timeout=self.timeout,
             )
 
             return self._extract_content_from_response(response)
@@ -118,7 +123,8 @@ class CompletionService:
             raise
         except Exception as e:
             logger.error(f"Async completion generation failed: {str(e)}")
-            raise wrap_litellm_error(e, "completion", self.provider, self.model) from e
+            raise wrap_litellm_error(
+                e, "completion", self.provider, self.model) from e
 
     async def _acompletion_stream_raw(
         self, history: List[Dict], prompt: str, images: Optional[List[str]] = None, memory: bool = False
@@ -138,6 +144,7 @@ class CompletionService:
                 messages=messages,
                 stream=True,
                 caching=self.caching,
+                timeout=self.timeout,
             )
 
             # Process the raw stream and yield clean text chunks
@@ -160,7 +167,8 @@ class CompletionService:
             raise
         except Exception as e:
             logger.error(f"Async streaming generation failed: {str(e)}")
-            raise wrap_litellm_error(e, "completion", self.provider, self.model) from e
+            raise wrap_litellm_error(
+                e, "completion", self.provider, self.model) from e
 
     def _completion_core(
         self, history: List[Dict], prompt: str, images: Optional[List[str]] = None, memory: bool = False
@@ -180,6 +188,7 @@ class CompletionService:
                 messages=messages,
                 stream=False,
                 caching=self.caching,
+                timeout=self.timeout,
             )
 
             return self._extract_content_from_response(response)
@@ -189,7 +198,8 @@ class CompletionService:
             raise
         except Exception as e:
             logger.error(f"Sync completion generation failed: {str(e)}")
-            raise wrap_litellm_error(e, "completion", self.provider, self.model) from e
+            raise wrap_litellm_error(
+                e, "completion", self.provider, self.model) from e
 
     async def agenerate_stream(
         self, history: List[Dict], prompt: str, images: Optional[List[str]] = None, memory: bool = False

@@ -75,34 +75,76 @@ def check_vision_content(document_id: str):
 
                     print(f"\n从向量存储检索到 {len(points)} 个点")
 
-                    for i, point in enumerate(points[:3], 1):  # 只显示前3个
-                        print(f"\n--- 点 {i} (ID: {point.id}) ---")
+                    vision_texts = []
+                    for i, point in enumerate(points, 1):
+                        text = None
+                        metadata = {}
+                        asset_id = None
+
                         if point.payload:
                             # 检查_node_content
                             node_content = point.payload.get("_node_content")
                             if node_content:
                                 try:
                                     payload_data = json.loads(node_content)
-                                    text = payload_data.get("text", "")
                                     metadata = payload_data.get("metadata", {})
-                                    print(f"  文本长度: {len(text)} 字符")
-                                    print(f"  元数据: {metadata}")
-                                    if text:
-                                        print(f"  文本预览: {text[:200]}...")
+                                    if metadata.get("index_method") == "vision_to_text":
+                                        text = payload_data.get("text", "")
+                                        asset_id = metadata.get("asset_id", "")
                                 except:
-                                    print(
-                                        f"  无法解析_node_content: {node_content[:100]}...")
+                                    pass
 
-                            # 检查直接metadata
-                            metadata = point.payload.get("metadata", {})
-                            if metadata:
-                                print(f"  直接metadata: {metadata}")
+                            # 检查直接payload结构
+                            if not text or not text.strip():
+                                direct_metadata = point.payload.get(
+                                    "metadata", {})
+                                if direct_metadata.get("index_method") == "vision_to_text":
+                                    text = point.payload.get("text", "")
+                                    if not text and node_content:
+                                        try:
+                                            payload_data = json.loads(
+                                                node_content)
+                                            text = payload_data.get("text", "")
+                                            metadata = payload_data.get(
+                                                "metadata", {})
+                                        except:
+                                            pass
+                                    asset_id = direct_metadata.get(
+                                        "asset_id") or metadata.get("asset_id")
 
-                            # 检查直接text
-                            text = point.payload.get("text", "")
-                            if text:
-                                print(f"  直接text长度: {len(text)} 字符")
-                                print(f"  直接text预览: {text[:200]}...")
+                        if text and text.strip():
+                            vision_texts.append({
+                                "index": i,
+                                "point_id": point.id,
+                                "asset_id": asset_id,
+                                "text": text,
+                                "length": len(text)
+                            })
+                            print(
+                                f"✅ 找到Vision-to-Text #{i} (长度: {len(text)} 字符, Asset ID: {asset_id or 'N/A'})")
+
+                    if vision_texts:
+                        print(f"\n{'='*80}")
+                        print(
+                            f"Vision-to-Text完整内容 (共 {len(vision_texts)} 个片段)")
+                        print("="*80)
+                        for item in vision_texts:
+                            print(f"\n{'='*80}")
+                            print(
+                                f"片段 #{item['index']} (Point ID: {item['point_id']})")
+                            if item['asset_id']:
+                                print(f"Asset ID: {item['asset_id']}")
+                            print(f"文本长度: {item['length']} 字符")
+                            print(f"{'-'*80}")
+                            print(item['text'])
+                            print(f"{'='*80}")
+
+                        total_chars = sum(item['length']
+                                          for item in vision_texts)
+                        print(
+                            f"\n总计: {len(vision_texts)} 个Vision-to-Text片段, 总字符数: {total_chars}")
+                    else:
+                        print("\n⚠️  未找到Vision-to-Text文本内容")
             except Exception as e:
                 print(f"❌ 解析索引数据失败: {e}")
                 import traceback

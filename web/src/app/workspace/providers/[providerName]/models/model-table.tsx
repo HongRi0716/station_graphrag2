@@ -39,6 +39,7 @@ import {
   ChevronDown,
   Columns3,
   EllipsisVertical,
+  Eye,
   MessageSquareCode,
   Plus,
   SquarePen,
@@ -90,13 +91,11 @@ export function ModelTable({
       value: 'completion',
     },
   ]);
-  const currentApiFilter = React.useMemo(
-    () =>
-      columnFilters.find((item) => item.id === 'api')?.value as
-        | LlmProviderModelApiEnum
-        | undefined,
-    [columnFilters],
-  );
+  const currentApiFilter = React.useMemo(() => {
+    const filterValue = columnFilters.find((item) => item.id === 'api')?.value;
+    // Support 'vision' as a special filter value
+    return filterValue as LlmProviderModelApiEnum | 'vision' | undefined;
+  }, [columnFilters]);
   const [sorting, setSorting] = React.useState<SortingState>([
     {
       id: 'created',
@@ -216,23 +215,60 @@ export function ModelTable({
         accessorKey: 'api',
         header: page_models('model.api_type'),
         cell: ({ row }) => {
-          let icon;
-          switch (row.original.api) {
-            case 'completion':
-              icon = <MessageSquareCode />;
-              break;
-            case 'embedding':
-              icon = <BetweenVerticalStart />;
-              break;
-            case 'rerank':
-              icon = <ArrowUpDown />;
-              break;
+          // Check if this is a vision model (completion API with vision tag)
+          // Vision models are used for Vision-to-Text (视觉转文本) conversion
+          const isVision =
+            row.original.api === 'completion' &&
+            (row.original.tags?.includes('vision') ?? false);
+
+          let icon: React.ReactNode;
+          let displayText: string;
+
+          if (isVision) {
+            icon = <Eye />;
+            displayText = 'vision';
+          } else {
+            // Handle standard API types: completion, embedding, rerank
+            switch (row.original.api) {
+              case 'completion':
+                icon = <MessageSquareCode />;
+                displayText = 'completion';
+                break;
+              case 'embedding':
+                icon = <BetweenVerticalStart />;
+                displayText = 'embedding';
+                break;
+              case 'rerank':
+                icon = <ArrowUpDown />;
+                displayText = 'rerank';
+                break;
+              default:
+                icon = <MessageSquareCode />;
+                displayText = row.original.api;
+            }
           }
+
           return (
             <Badge variant="outline">
-              {icon} {row.original.api}
+              {icon} {displayText}
             </Badge>
           );
+        },
+        filterFn: (row, id, value) => {
+          // Special handling for vision filter (Vision-to-Text models)
+          if (value === 'vision') {
+            return (
+              row.original.api === 'completion' &&
+              (row.original.tags?.includes('vision') ?? false)
+            );
+          }
+          // For other filters, exclude vision models from completion results
+          if (value === 'completion') {
+            const isVision = row.original.tags?.includes('vision') ?? false;
+            return row.original.api === value && !isVision;
+          }
+          // Standard filter for embedding and rerank
+          return row.original.api === value;
         },
       },
       {
@@ -339,6 +375,7 @@ export function ModelTable({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="completion">Completion</SelectItem>
+              <SelectItem value="vision">Vision (Vision-to-Text)</SelectItem>
               <SelectItem value="embedding">Embedding</SelectItem>
               <SelectItem value="rerank">Rerank</SelectItem>
             </SelectContent>

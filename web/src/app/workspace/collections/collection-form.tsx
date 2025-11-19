@@ -210,30 +210,74 @@ export const CollectionForm = ({ action }: { action: 'add' | 'edit' }) => {
 
   /**
    * load models by 'enable_for_collection' in tags
+   * Also include vision models (with 'vision' tag) for Vision-to-Text support
    * set completion、embedding models used in model select component
    */
   const loadModels = useCallback(async () => {
-    const res = await apiClient.defaultApi.availableModelsPost({
-      tagFilterRequest: {
-        tag_filters: [{ operation: 'AND', tags: ['enable_for_collection'] }],
-      },
+    // Load models with enable_for_collection tag
+    const [collectionModelsRes, visionModelsRes] = await Promise.all([
+      apiClient.defaultApi.availableModelsPost({
+        tagFilterRequest: {
+          tag_filters: [{ operation: 'AND', tags: ['enable_for_collection'] }],
+        },
+      }),
+      // Also load vision models for Vision-to-Text support
+      apiClient.defaultApi.availableModelsPost({
+        tagFilterRequest: {
+          tag_filters: [{ operation: 'AND', tags: ['vision'] }],
+        },
+      }),
+    ]);
+
+    const collectionModels = collectionModelsRes.data.items || [];
+    const visionModels = visionModelsRes.data.items || [];
+
+    // Merge completion models: collection models + vision models
+    const collectionCompletion = collectionModels.map((m) => ({
+      label: m.label,
+      name: m.name,
+      models: m.completion || [],
+    }));
+
+    const visionCompletion = visionModels.map((m) => ({
+      label: m.label,
+      name: m.name,
+      models: m.completion || [], // Vision models are completion models with vision tag
+    }));
+
+    // Merge and deduplicate completion models by provider and model name
+    const completionMap = new Map<
+      string,
+      { label?: string; name?: string; models?: ModelSpec[] }
+    >();
+
+    [...collectionCompletion, ...visionCompletion].forEach((provider) => {
+      const key = provider.name || '';
+      if (completionMap.has(key)) {
+        // Merge models, avoiding duplicates
+        const existing = completionMap.get(key)!;
+        const existingModelNames = new Set(
+          existing.models?.map((m) => m.model) || [],
+        );
+        const newModels =
+          provider.models?.filter((m) => !existingModelNames.has(m.model)) ||
+          [];
+        existing.models = [...(existing.models || []), ...newModels];
+      } else {
+        completionMap.set(key, { ...provider });
+      }
     });
-    const completion = res.data.items?.map((m) => {
-      return {
-        label: m.label,
-        name: m.name,
-        models: m.completion,
-      };
-    });
-    const embedding = res.data.items?.map((m) => {
-      return {
-        label: m.label,
-        name: m.name,
-        models: m.embedding,
-      };
-    });
-    setCompletionModels(completion || []);
-    setEmbeddingModels(embedding || []);
+
+    const completion = Array.from(completionMap.values());
+
+    const embedding = collectionModels.map((m) => ({
+      label: m.label,
+      name: m.name,
+      models: m.embedding,
+    }));
+
+    setCompletionModels(completion);
+    setEmbeddingModels(embedding);
   }, []);
 
   /**
@@ -645,12 +689,24 @@ export const CollectionForm = ({ action }: { action: 'add' | 'edit' }) => {
                                 <SelectGroup key={item.name}>
                                   <SelectLabel>{item.label}</SelectLabel>
                                   {item.models?.map((model) => {
+                                    const isVision =
+                                      model.tags?.includes('vision') ?? false;
                                     return (
                                       <SelectItem
                                         key={model.model}
                                         value={model.model || ''}
                                       >
-                                        {model.model}
+                                        <div className="flex items-center gap-2">
+                                          <span>{model.model}</span>
+                                          {isVision && (
+                                            <Badge
+                                              variant="outline"
+                                              className="text-xs"
+                                            >
+                                              Vision
+                                            </Badge>
+                                          )}
+                                        </div>
                                       </SelectItem>
                                     );
                                   })}
