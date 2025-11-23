@@ -19,6 +19,7 @@ import {
   CommandItem,
   CommandList,
 } from '@/components/ui/command';
+import { Input } from '@/components/ui/input';
 import {
   Popover,
   PopoverContent,
@@ -35,12 +36,14 @@ import {
   LoaderCircle,
   Maximize,
   Minimize,
+  Search,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useTheme } from 'next-themes';
 import dynamic from 'next/dynamic';
 import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import { CollectionGraphNodeDetail } from './collection-graph-node-detail';
 import { CollectionGraphNodeMerge } from './collection-graph-node-merge';
 
@@ -53,10 +56,15 @@ const ForceGraph2D = dynamic(
 
 export const CollectionGraph = ({
   marketplace = false,
+  mode = 'contextual',
+  collectionId,
 }: {
   marketplace: boolean;
+  mode?: 'contextual' | 'global';
+  collectionId?: string;
 }) => {
   const params = useParams();
+  const currentCollectionId = collectionId || (params.collectionId as string);
   const [fullscreen, setFullscreen] = useState<boolean>(false);
   const { resolvedTheme } = useTheme();
   const page_graph = useTranslations('page_graph');
@@ -85,6 +93,7 @@ export const CollectionGraph = ({
   const [highlightLinks, setHighlightLinks] = useState(new Set());
   const [hoverNode, setHoverNode] = useState<GraphNode>();
   const [activeNode, setActiveNode] = useState<GraphNode>();
+  const [globalSearchQuery, setGlobalSearchQuery] = useState('');
   const color = useMemo(() => d3.scaleOrdinal(d3.schemeCategory10), []);
 
   const { NODE_MIN, NODE_MAX } = useMemo(
@@ -97,70 +106,102 @@ export const CollectionGraph = ({
     [],
   );
 
-  const getGraphData = useCallback(async () => {
-    if (typeof params.collectionId !== 'string') return;
-    setLoading(true);
+  const getGraphData = useCallback(
+    async (query?: string) => {
+      if (typeof currentCollectionId !== 'string') return;
+      setLoading(true);
 
-    let data: KnowledgeGraph;
+      try {
+        let data: KnowledgeGraph;
 
-    if (!marketplace) {
-      const res = await apiClient.graphApi.collectionsCollectionIdGraphsGet(
-        {
-          collectionId: params.collectionId,
-        },
-        {
-          timeout: 1000 * 20,
-        },
-      );
-      data = res.data;
-    } else {
-      const res =
-        await apiClient.defaultApi.marketplaceCollectionsCollectionIdGraphGet(
+        if (!marketplace) {
+          if (mode === 'global') {
+            if (!query) {
+              setLoading(false);
+              return;
+            }
+            const res =
+              await apiClient.graphApi.collectionsCollectionIdGraphsGet(
+                {
+                  collectionId: 'all',
+                },
+                { timeout: 1000 * 30 },
+              );
+            data = res.data;
+          } else {
+            const res =
+              await apiClient.graphApi.collectionsCollectionIdGraphsGet(
+                {
+                  collectionId: currentCollectionId,
+                },
+                {
+                  timeout: 1000 * 20,
+                },
+              );
+            data = res.data;
+          }
+        } else {
+          const res =
+            await apiClient.defaultApi.marketplaceCollectionsCollectionIdGraphGet(
+              {
+                collectionId: currentCollectionId,
+              },
+              {
+                timeout: 1000 * 20,
+              },
+            );
+          data = res.data as KnowledgeGraph;
+        }
+
+        const nodes =
+          data.nodes?.map((n) => {
+            const targetCount = data.edges.filter(
+              (edg) => edg.target === n.id,
+            ).length;
+            const sourceCount = data.edges.filter(
+              (edg) => edg.source === n.id,
+            ).length;
+            return {
+              ...n,
+              value: Math.max(targetCount, sourceCount, NODE_MIN),
+            };
+          }) || [];
+        const links = data.edges || [];
+
+        setGraphData({ nodes, links });
+        setAllEntities(_.groupBy(nodes, (n) => n.properties.entity_type));
+      } catch (e) {
+        console.error(e);
+        toast.error('Failed to load graph data');
+      } finally {
+        setLoading(false);
+      }
+    },
+    [NODE_MIN, marketplace, currentCollectionId, mode],
+  );
+
+  const getMergeSuggestions = useCallback(async () => {
+    if (
+      typeof currentCollectionId !== 'string' ||
+      marketplace ||
+      mode === 'global'
+    )
+      return;
+    try {
+      const suggestionRes =
+        await apiClient.graphApi.collectionsCollectionIdGraphsMergeSuggestionsPost(
           {
-            collectionId: params.collectionId,
+            collectionId: currentCollectionId,
           },
           {
             timeout: 1000 * 20,
           },
         );
-      data = res.data as KnowledgeGraph;
+      setMergeSuggestion(suggestionRes.data);
+    } catch (e) {
+      console.error(e);
     }
-
-    const nodes =
-      data.nodes?.map((n) => {
-        const targetCount = data.edges.filter(
-          (edg) => edg.target === n.id,
-        ).length;
-        const sourceCount = data.edges.filter(
-          (edg) => edg.source === n.id,
-        ).length;
-        return {
-          ...n,
-          value: Math.max(targetCount, sourceCount, NODE_MIN),
-        };
-      }) || [];
-    const links = data.edges || [];
-
-    setGraphData({ nodes, links });
-
-    setAllEntities(_.groupBy(nodes, (n) => n.properties.entity_type));
-
-    setLoading(false);
-  }, [NODE_MIN, marketplace, params.collectionId]);
-
-  const getMergeSuggestions = useCallback(async () => {
-    if (typeof params.collectionId !== 'string' || marketplace) return;
-    const suggestionRes =
-      await apiClient.graphApi.collectionsCollectionIdGraphsMergeSuggestionsPost(
-        {
-          collectionId: params.collectionId,
-        },
-        {
-          timeout: 1000 * 20,
-        },
-      );
-    setMergeSuggestion(suggestionRes.data);
-  }, [marketplace, params.collectionId]);
+  }, [marketplace, currentCollectionId, mode]);
 
   const handleCloseDetail = useCallback(() => {
     setActiveNode(undefined);
@@ -223,25 +264,16 @@ export const CollectionGraph = ({
   }, [activeNode, graphData?.links, highlightLinks, highlightNodes]);
 
   useEffect(() => {
-    getGraphData();
-    getMergeSuggestions();
-    // init the graph config
-    // graphRef.current
-    //   ?.d3Force(
-    //     'link',
-    //     d3.forceLink().distance((link) => {
-    //       console.log(link)
-    //       return Math.min(
-    //         Math.max(link.source.value, link.target.value, LINK_MIN),
-    //         LINK_MAX,
-    //       );
-    //     }),
-    //   )
-    //   .d3Force('collision', d3.forceCollide().radius(NODE_MIN))
-    //   .d3Force('charge', d3.forceManyBody().strength(-40))
-    //   .d3Force('x', d3.forceX())
-    //   .d3Force('y', d3.forceY());
-  }, [getGraphData, getMergeSuggestions]);
+    if (mode === 'contextual') {
+      getGraphData();
+      getMergeSuggestions();
+    }
+  }, [getGraphData, getMergeSuggestions, mode]);
+
+  const handleGlobalSearchSubmit = useCallback(() => {
+    if (!globalSearchQuery.trim()) return;
+    getGraphData(globalSearchQuery);
+  }, [globalSearchQuery, getGraphData]);
 
   return (
     <div
@@ -257,75 +289,89 @@ export const CollectionGraph = ({
           'pt-2': fullscreen,
         })}
       >
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button variant="outline" className="w-40 justify-between">
-              {page_graph('node_search')}
-              <ChevronDown />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-[200px] p-0" align="start">
-            <Command>
-              <CommandInput placeholder="Search node..." className="h-9" />
-              <CommandList className="max-h-60">
-                <CommandEmpty>No node found.</CommandEmpty>
-                <CommandGroup>
-                  {_.map(graphData?.nodes, (node, key) => {
-                    const isActive = activeNode?.id === node.id;
-                    return (
-                      <CommandItem
-                        key={key}
-                        className={cn('capitalize')}
-                        value={node.id}
-                        onSelect={() => {
-                          setActiveNode(isActive ? undefined : node);
-                        }}
-                      >
-                        <div className="truncate">{node.id}</div>
-                        <Check
-                          className={cn(
-                            'ml-auto',
-                            isActive ? 'opacity-100' : 'opacity-0',
-                          )}
-                        />
-                      </CommandItem>
-                    );
-                  })}
-                </CommandGroup>
-              </CommandList>
-            </Command>
-          </PopoverContent>
-        </Popover>
+        {mode === 'contextual' ? (
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className="w-40 justify-between">
+                {page_graph('node_search')}
+                <ChevronDown />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[200px] p-0" align="start">
+              <Command>
+                <CommandInput placeholder="Search node..." className="h-9" />
+                <CommandList className="max-h-60">
+                  <CommandEmpty>No node found.</CommandEmpty>
+                  <CommandGroup>
+                    {_.map(graphData?.nodes, (node, key) => {
+                      const isActive = activeNode?.id === node.id;
+                      return (
+                        <CommandItem
+                          key={key}
+                          className={cn('capitalize')}
+                          value={node.id}
+                          onSelect={() => {
+                            setActiveNode(isActive ? undefined : node);
+                          }}
+                        >
+                          <div className="truncate">{node.id}</div>
+                          <Check
+                            className={cn(
+                              'ml-auto',
+                              isActive ? 'opacity-100' : 'opacity-0',
+                            )}
+                          />
+                        </CommandItem>
+                      );
+                    })}
+                  </CommandGroup>
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
+        ) : (
+          <div className="flex items-center gap-2">
+            <Badge variant="secondary" className="text-sm font-normal">
+              {page_graph('global_view')}
+            </Badge>
+          </div>
+        )}
         <div className="flex flex-row items-center gap-2">
-          {!marketplace && !_.isEmpty(mergeSuggestion?.suggestions) && (
-            <Tooltip>
-              <TooltipTrigger>
-                <Badge
-                  variant="destructive"
-                  className="mr-4 h-5 min-w-5 cursor-pointer rounded-full px-1 font-mono tabular-nums"
-                  onClick={() => setMergeSuggestionOpen(true)}
-                >
-                  {mergeSuggestion?.suggestions?.length &&
-                  mergeSuggestion?.suggestions?.length > 10
-                    ? '10+'
-                    : mergeSuggestion?.suggestions?.length}
-                </Badge>
-              </TooltipTrigger>
-              <TooltipContent>
-                {page_graph('merge_infomation', {
-                  count: String(mergeSuggestion?.pending_count || 0),
-                })}
-              </TooltipContent>
-            </Tooltip>
-          )}
+          {!marketplace &&
+            mode !== 'global' &&
+            !_.isEmpty(mergeSuggestion?.suggestions) && (
+              <Tooltip>
+                <TooltipTrigger>
+                  <Badge
+                    variant="destructive"
+                    className="mr-4 h-5 min-w-5 cursor-pointer rounded-full px-1 font-mono tabular-nums"
+                    onClick={() => setMergeSuggestionOpen(true)}
+                  >
+                    {mergeSuggestion?.suggestions?.length &&
+                    mergeSuggestion?.suggestions?.length > 10
+                      ? '10+'
+                      : mergeSuggestion?.suggestions?.length}
+                  </Badge>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {page_graph('merge_infomation', {
+                    count: String(mergeSuggestion?.pending_count || 0),
+                  })}
+                </TooltipContent>
+              </Tooltip>
+            )}
 
           <Button
             size="icon"
             variant="outline"
             className="cursor-pointer"
             onClick={() => {
-              getGraphData();
-              getMergeSuggestions();
+              if (mode === 'global') {
+                handleGlobalSearchSubmit();
+              } else {
+                getGraphData();
+                getMergeSuggestions();
+              }
             }}
           >
             <LoaderCircle className={loading ? 'animate-spin' : ''} />
@@ -346,27 +392,63 @@ export const CollectionGraph = ({
 
       <Card
         ref={containerRef}
-        className="bg-card/0 relative flex flex-1 gap-0 py-0"
+        className="bg-card/0 relative flex flex-1 gap-0 overflow-hidden py-0"
       >
-        {graphData === undefined && (
-          <div className="absolute top-4/12 left-6/12">
+        {mode === 'global' &&
+          (!graphData?.nodes || graphData.nodes.length === 0) &&
+          !loading && (
+            <div className="bg-background/50 absolute inset-0 z-20 flex flex-col items-center justify-center p-6 backdrop-blur-sm">
+              <div className="flex w-full max-w-2xl flex-col items-center gap-4 text-center">
+                <h2 className="text-3xl font-bold tracking-tight">
+                  {page_graph('global_explorer_title')}
+                </h2>
+                <p className="text-muted-foreground mb-4">
+                  {page_graph('global_explorer_description')}
+                </p>
+                <div className="flex w-full max-w-md items-center space-x-2">
+                  <Input
+                    className="h-12 text-lg shadow-lg"
+                    placeholder={page_graph('global_search_placeholder')}
+                    value={globalSearchQuery}
+                    onChange={(e) => setGlobalSearchQuery(e.target.value)}
+                    onKeyDown={(e) =>
+                      e.key === 'Enter' && handleGlobalSearchSubmit()
+                    }
+                  />
+                  <Button
+                    size="lg"
+                    className="h-12 px-6 shadow-lg"
+                    onClick={handleGlobalSearchSubmit}
+                  >
+                    <Search className="mr-2 h-5 w-5" /> {page_graph('search')}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+
+        {loading && (
+          <div className="absolute top-4/12 left-1/2 z-30 -translate-x-1/2">
             <div className="flex flex-row gap-2 py-2">
-              <div className="bg-muted-foreground animate-caret-blink size-2 rounded-full delay-0"></div>
-              <div className="bg-muted-foreground animate-caret-blink size-2 rounded-full delay-200"></div>
-              <div className="bg-muted-foreground animate-caret-blink size-2 rounded-full delay-400"></div>
+              <div className="bg-primary size-3 animate-bounce rounded-full delay-0"></div>
+              <div className="bg-primary size-3 animate-bounce rounded-full delay-150"></div>
+              <div className="bg-primary size-3 animate-bounce rounded-full delay-300"></div>
             </div>
           </div>
         )}
 
-        {graphData !== undefined && _.isEmpty(graphData?.nodes) && (
-          <div className="absolute top-4/12 w-full">
-            <div className="text-muted-foreground text-center">
-              {page_graph('no_nodes_found')}
+        {graphData !== undefined &&
+          _.isEmpty(graphData?.nodes) &&
+          !loading &&
+          mode !== 'global' && (
+            <div className="absolute top-4/12 w-full">
+              <div className="text-muted-foreground text-center">
+                {page_graph('no_nodes_found')}
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        <div className="bg-background absolute top-0 right-0 left-0 z-10 flex flex-row flex-wrap gap-1 rounded-xl p-2">
+        <div className="bg-background pointer-events-none absolute top-0 right-0 left-0 z-10 flex flex-row flex-wrap gap-1 rounded-xl p-2">
           {_.map(allEntities, (item, key) => {
             const isActive = activeEntities.includes(key);
             //@ts-expect-error entity error
@@ -375,7 +457,7 @@ export const CollectionGraph = ({
               <Badge
                 key={key}
                 className={cn(
-                  'cursor-pointer capitalize',
+                  'pointer-events-auto cursor-pointer capitalize',
                   isActive ? '' : 'border-transparent',
                 )}
                 style={{

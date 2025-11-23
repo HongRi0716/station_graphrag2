@@ -347,6 +347,12 @@
     "metadata": {
       "title": "Knowledge Graph"
     },
+    "global_title": "Global Knowledge Graph",
+    "global_description": "Explore connections across all knowledge bases.",
+    "global_explorer_title": "Global Knowledge Explorer",
+    "global_explorer_description": "Search across all knowledge bases to discover cross-domain connections. Enter an entity name (e.g. \"Transformer #1\") to start.",
+    "global_view": "Global View",
+    "global_search_placeholder": "Search global entities...",
     "node_group": "Node Group",
     "search": "Search",
     "search_placeholder": "Search global entities...",

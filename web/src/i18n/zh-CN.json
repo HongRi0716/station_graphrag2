@@ -350,6 +350,12 @@
     "metadata": {
       "title": "知识图谱"
     },
+    "global_title": "全局知识图谱",
+    "global_description": "探索所有知识库之间的连接关系。",
+    "global_explorer_title": "全局知识探索器",
+    "global_explorer_description": "搜索所有知识库以发现跨域连接。输入实体名称（例如 \"变压器 #1\"）开始。",
+    "global_view": "全局视图",
+    "global_search_placeholder": "搜索全局实体...",
     "node_group": "节点分组",
     "search": "搜索",
     "search_placeholder": "搜索全域实体...",

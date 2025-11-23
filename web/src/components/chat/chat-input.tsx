@@ -262,14 +262,14 @@ export const ChatInput = ({
     }
 
     // Check if global knowledge base is selected
-    const isGlobalSearch = selectedCollections.includes('__GLOBAL__');
+    const isGlobalSearch = selectedCollections.includes('全局知识图谱');
 
     const data = {
       query: _query,
       collections: isGlobalSearch
         ? [] // Empty array triggers global search
         : collections.filter((c) =>
-            selectedCollections.some((id) => c.id === id),
+            selectedCollections.some((title) => c.title === title),
           ),
       completion: {
         model: modelName,
@@ -327,7 +327,8 @@ export const ChatInput = ({
 
   const enabledColelctions = useMemo(() => {
     return collections.filter(
-      (c) => !selectedCollections.includes(c.id || '') && c.id !== '__GLOBAL__', // Exclude the special global ID
+      (c) =>
+        !selectedCollections.includes(c.title || '') && c.id !== '__GLOBAL__', // Exclude the special global ID
     );
   }, [collections, selectedCollections]);
 
@@ -466,7 +467,7 @@ export const ChatInput = ({
                 {/* Global Knowledge Base Option */}
                 <MentionItem
                   key="__GLOBAL__"
-                  value="__GLOBAL__"
+                  value="全局知识图谱"
                   className="flex-col items-start gap-0.5 border-b"
                 >
                   <div className="flex items-center gap-2">
@@ -485,7 +486,7 @@ export const ChatInput = ({
                   enabledColelctions.map((collection) => (
                     <MentionItem
                       key={collection.id}
-                      value={collection.id || ''}
+                      value={collection.title || ''}
                       className="flex-col items-start gap-0.5"
                       disabled={collection.status !== 'ACTIVE'}
                     >
