@@ -20,8 +20,13 @@ RUN apt update && \
 FROM python:3.11.13-slim
 
 # Install minimal system dependencies in one layer and clean up
+# Include LibreOffice for .doc/.ppt/.xls file conversion
 RUN apt update && \
-    apt install --no-install-recommends -y curl && \
+    apt install --no-install-recommends -y \
+        curl \
+        libreoffice \
+        libreoffice-writer \
+        libreoffice-core && \
     apt clean && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* /var/cache/apt/archives/*
 

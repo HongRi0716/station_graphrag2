@@ -1,19 +1,14 @@
 'use client';
 
 import {
+  Activity,
   BookOpen,
   Bot,
-  Calculator,
-  Database,
   Eye,
   Globe,
   GraduationCap,
-  LayoutGrid,
   Library,
-  PenTool,
-  Settings,
   Share2,
-  ShieldCheck,
   Zap,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
@@ -87,7 +82,7 @@ export function MenuMain() {
             <SidebarMenuButton asChild isActive={isActive('/workspace/agents')}>
               <Link href="/workspace/agents">
                 <Bot className="size-4" />
-                <span>{t('agents')}</span>
+                <span>{t('digital_engineer_team')}</span>
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
@@ -100,18 +95,10 @@ export function MenuMain() {
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
-            <SidebarMenuButton asChild isActive={isAgentActive('detective')}>
-              <Link href="/workspace/chat?agent=detective">
-                <BookOpen className="size-4 text-purple-500" />
-                <span>{t('agent_detective')}</span>
-              </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            <SidebarMenuButton asChild isActive={isAgentActive('gatekeeper')}>
-              <Link href="/workspace/chat?agent=gatekeeper">
-                <ShieldCheck className="size-4 text-blue-500" />
-                <span>{t('agent_gatekeeper')}</span>
+            <SidebarMenuButton asChild isActive={isAgentActive('sentinel')}>
+              <Link href="/workspace/chat?agent=sentinel">
+                <Eye className="size-4 text-slate-500" />
+                <span>{t('agent_sentinel')}</span>
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
@@ -124,50 +111,21 @@ export function MenuMain() {
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
-            <SidebarMenuButton asChild isActive={isActive('/workspace/agents/specific/calculator')}>
-              <Link href="/workspace/agents/specific/calculator">
-                <Calculator className="size-4 text-orange-500" />
-                <span>{t('agent_calculator')}</span>
-              </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            <SidebarMenuButton asChild isActive={isActive('/workspace/agents/specific/sentinel')}>
-              <Link href="/workspace/agents/specific/sentinel">
-                <Eye className="size-4 text-slate-500" />
-                <span>{t('agent_sentinel')}</span>
-              </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            <SidebarMenuButton asChild isActive={isActive('/workspace/agents/specific/instructor')}>
-              <Link href="/workspace/agents/specific/instructor">
-                <GraduationCap className="size-4 text-blue-500" />
+            <SidebarMenuButton asChild isActive={isAgentActive('instructor')}>
+              <Link href="/workspace/chat?agent=instructor">
+                <GraduationCap className="size-4 text-indigo-500" />
                 <span>{t('agent_instructor')}</span>
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
-            <SidebarMenuButton asChild isActive={isActive('/workspace/agents/specific/scribe')}>
-              <Link href="/workspace/agents/specific/scribe">
-                <PenTool className="size-4 text-purple-500" />
-                <span>{t('agent_scribe')}</span>
-              </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            <SidebarMenuButton asChild isActive={isActive('/workspace/agents/specific/prophet')}>
-              <Link href="/workspace/agents/specific/prophet">
-                <Bot className="size-4 text-indigo-500" />
-                <span>{t('agent_prophet')}</span>
-              </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            <SidebarMenuButton asChild isActive={isActive('/workspace/agents/specific/guardian')}>
-              <Link href="/workspace/agents/specific/guardian">
-                <ShieldCheck className="size-4 text-emerald-500" />
-                <span>{t('agent_guardian')}</span>
+            <SidebarMenuButton
+              asChild
+              isActive={isAgentActive('diagnostician')}
+            >
+              <Link href="/workspace/chat?agent=diagnostician">
+                <Activity className="size-4 text-red-600" />
+                <span>{t('agent_diagnostician')}</span>
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>

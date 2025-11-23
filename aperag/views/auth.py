@@ -69,6 +69,7 @@ class UserManager(BaseUserManager[User, str]):
             from aperag.schema.view_models import BotCreate
             from aperag.service.bot_service import bot_service
             from aperag.service.chat_collection_service import chat_collection_service
+            from aperag.service.collection_service import collection_service
             from aperag.service.quota_service import quota_service
 
             # Initialize user quotas first
@@ -91,9 +92,28 @@ class UserManager(BaseUserManager[User, str]):
             # Create user's chat collection
             await chat_collection_service.initialize_user_chat_collection(str(user.id))
 
-            logger.info(f"Initialized resources for user {user.username or user.email} ({user.id})")
+            # Create preset collections for new user if auto_create_for_new_users is enabled
+            try:
+                preset_config = await collection_service.get_preset_collections_config()
+                if preset_config.get("auto_create_for_new_users", False):
+                    # Determine locale from user preference or default to 'zh'
+                    locale = "zh"  # TODO: Get locale from user settings if available
+                    created_collections = await collection_service.create_preset_collections_for_user(
+                        user=str(user.id),
+                        locale=locale
+                    )
+                    logger.info(
+                        f"Created {len(created_collections)} preset collections for user {user.username or user.email} ({user.id})")
+            except Exception as e:
+                # Don't fail user registration if preset collections creation fails
+                logger.warning(
+                    f"Failed to create preset collections for user {user.username or user.email} ({user.id}): {e}")
+
+            logger.info(
+                f"Initialized resources for user {user.username or user.email} ({user.id})")
         except Exception as e:
-            logger.error(f"Failed to initialize resources for user {user.username or user.email} ({user.id}): {e}")
+            logger.error(
+                f"Failed to initialize resources for user {user.username or user.email} ({user.id}): {e}")
 
     async def _fetch_github_username_if_needed(self, user: User):
         """
@@ -130,11 +150,14 @@ class UserManager(BaseUserManager[User, str]):
                         self.user_db.session.add(user)
                         await self.user_db.session.commit()
                         await self.user_db.session.refresh(user)
-                        logger.info(f"Updated GitHub user {user.id} with username: {github_username}")
+                        logger.info(
+                            f"Updated GitHub user {user.id} with username: {github_username}")
                 else:
-                    logger.warning(f"Failed to fetch GitHub user data for user {user.id}: HTTP {response.status_code}")
+                    logger.warning(
+                        f"Failed to fetch GitHub user data for user {user.id}: HTTP {response.status_code}")
         except Exception as e:
-            logger.error(f"Failed to fetch GitHub username for user {user.id}: {e}")
+            logger.error(
+                f"Failed to fetch GitHub username for user {user.id}: {e}")
 
     def parse_id(self, value: any) -> str:
         """Parse ID from any type to str"""
@@ -188,9 +211,11 @@ async def authenticate_websocket_user(websocket: WebSocket, user_manager: UserMa
         cookies_header = None
         if hasattr(websocket, "headers"):
             if hasattr(websocket.headers, "get"):
-                cookie_value = websocket.headers.get("cookie") or websocket.headers.get(b"cookie")
+                cookie_value = websocket.headers.get(
+                    "cookie") or websocket.headers.get(b"cookie")
                 if cookie_value:
-                    cookies_header = cookie_value.decode() if isinstance(cookie_value, bytes) else cookie_value
+                    cookies_header = cookie_value.decode() if isinstance(
+                        cookie_value, bytes) else cookie_value
             else:
                 try:
                     for name, value in websocket.headers:
@@ -198,7 +223,8 @@ async def authenticate_websocket_user(websocket: WebSocket, user_manager: UserMa
                             cookies_header = value.decode() if isinstance(value, bytes) else value
                             break
                 except (TypeError, ValueError):
-                    logger.debug("WebSocket headers format not supported for authentication")
+                    logger.debug(
+                        "WebSocket headers format not supported for authentication")
         if not cookies_header:
             logger.debug("No cookies found in WebSocket headers")
             return None
@@ -214,7 +240,8 @@ async def authenticate_websocket_user(websocket: WebSocket, user_manager: UserMa
         jwt_strategy = get_jwt_strategy()
         user_data = await jwt_strategy.read_token(session_token, user_manager)
         if user_data:
-            logger.debug(f"Successfully authenticated user from WebSocket: {user_data.id}")
+            logger.debug(
+                f"Successfully authenticated user from WebSocket: {user_data.id}")
             return str(user_data.id)
         else:
             logger.debug("JWT token validation returned no user data")
@@ -240,14 +267,16 @@ async def authenticate_api_key(request: Request, session: AsyncSessionDep) -> Op
         return None
     result = await session.execute(
         select(ApiKey).where(
-            ApiKey.key == credentials, ApiKey.status == ApiKeyStatus.ACTIVE, ApiKey.gmt_deleted.is_(None)
+            ApiKey.key == credentials, ApiKey.status == ApiKeyStatus.ACTIVE, ApiKey.gmt_deleted.is_(
+                None)
         )
     )
     api_key = result.scalars().first()
     if not api_key:
         return None  # Don't raise, just return None to allow other auth methods
     result = await session.execute(
-        select(User).where(User.id == api_key.user, User.is_active.is_(True), User.gmt_deleted.is_(None))
+        select(User).where(User.id == api_key.user,
+                           User.is_active.is_(True), User.gmt_deleted.is_(None))
     )
     user = result.scalars().first()
     if user:
@@ -284,7 +313,8 @@ async def required_user(user: Optional[User] = Depends(optional_user)) -> User:
 async def get_current_admin(user: User = Depends(required_user)) -> User:
     """Get current admin user."""
     if user.role != Role.ADMIN:
-        raise HTTPException(status_code=403, detail="Only admin members can perform this action")
+        raise HTTPException(
+            status_code=403, detail="Only admin members can perform this action")
     return user
 
 
@@ -294,7 +324,8 @@ router = APIRouter()
 
 # --- Conditional OAuth Routers ---
 if is_google_oauth_enabled():
-    google_oauth_client = GoogleOAuth2(settings.google_oauth_client_id, settings.google_oauth_client_secret)
+    google_oauth_client = GoogleOAuth2(
+        settings.google_oauth_client_id, settings.google_oauth_client_secret)
     google_oauth_router = get_oauth_router(
         google_oauth_client,
         auth_backend,
@@ -304,10 +335,12 @@ if is_google_oauth_enabled():
         associate_by_email=True,
         is_verified_by_default=True,
     )
-    router.include_router(google_oauth_router, prefix="/auth/google", tags=["auth"])
+    router.include_router(google_oauth_router,
+                          prefix="/auth/google", tags=["auth"])
 
 if is_github_oauth_enabled():
-    github_oauth_client = GitHubOAuth2(settings.github_oauth_client_id, settings.github_oauth_client_secret)
+    github_oauth_client = GitHubOAuth2(
+        settings.github_oauth_client_id, settings.github_oauth_client_secret)
     github_oauth_router = get_oauth_router(
         github_oauth_client,
         auth_backend,
@@ -317,7 +350,8 @@ if is_github_oauth_enabled():
         associate_by_email=True,
         is_verified_by_default=True,
     )
-    router.include_router(github_oauth_router, prefix="/auth/github", tags=["auth"])
+    router.include_router(github_oauth_router,
+                          prefix="/auth/github", tags=["auth"])
 
 
 @router.post("/invite", tags=["invitations"])
@@ -332,7 +366,8 @@ async def create_invitation_view(
 
     result = await session.execute(select(User).where((User.username == data.username) | (User.email == data.email)))
     if result.scalars().first():
-        raise HTTPException(status_code=400, detail="User with this email or username already exists")
+        raise HTTPException(
+            status_code=400, detail="User with this email or username already exists")
     token = secrets.token_urlsafe(32)
     expires_at = utc_now() + timedelta(days=7)
     invitation = Invitation(
@@ -399,16 +434,20 @@ async def register_view(
     invitation = None
     if need_invitation:
         if not data.token:
-            raise HTTPException(status_code=400, detail="Invitation token is required")
+            raise HTTPException(
+                status_code=400, detail="Invitation token is required")
         if not data.email:
-            raise HTTPException(status_code=400, detail="Email is required when using invitation")
+            raise HTTPException(
+                status_code=400, detail="Email is required when using invitation")
 
         result = await session.execute(select(Invitation).where(Invitation.token == data.token))
         invitation = result.scalars().first()
         if not invitation or not invitation.is_valid():
-            raise HTTPException(status_code=400, detail="Invalid or expired invitation")
+            raise HTTPException(
+                status_code=400, detail="Invalid or expired invitation")
         if invitation.email != data.email:
-            raise HTTPException(status_code=400, detail="Email does not match invitation")
+            raise HTTPException(
+                status_code=400, detail="Email does not match invitation")
 
     # Check if user already exists
     result = await session.execute(select(User).where(User.username == data.username))
@@ -496,7 +535,8 @@ async def login_view(
     token = await strategy.write_token(user)
 
     # Set cookie
-    response.set_cookie(key="session", value=token, max_age=COOKIE_MAX_AGE, httponly=True, samesite="lax")
+    response.set_cookie(key="session", value=token,
+                        max_age=COOKIE_MAX_AGE, httponly=True, samesite="lax")
 
     return view_models.User(
         id=str(user.id),
@@ -556,7 +596,8 @@ async def list_users_view(
         result = await session.execute(select(User).options(selectinload(User.oauth_accounts)))
     else:
         result = await session.execute(
-            select(User).options(selectinload(User.oauth_accounts)).where(User.id == user.id)
+            select(User).options(selectinload(
+                User.oauth_accounts)).where(User.id == user.id)
         )
 
     users = []
@@ -594,9 +635,11 @@ async def change_password_view(
         raise HTTPException(status_code=400, detail="User not found")
 
     # Verify old password - use correct fastapi-users API
-    verified, _ = user_manager.password_helper.verify_and_update(data.old_password, user.hashed_password)
+    verified, _ = user_manager.password_helper.verify_and_update(
+        data.old_password, user.hashed_password)
     if not verified:
-        raise HTTPException(status_code=400, detail="Current password is incorrect")
+        raise HTTPException(
+            status_code=400, detail="Current password is incorrect")
 
     # Set new password
     user.hashed_password = user_manager.password_helper.hash(data.new_password)
@@ -620,14 +663,32 @@ async def delete_user_view(
 ):
     from sqlalchemy import select
 
-    result = await session.execute(select(User).where(User.id == user_id))
+    # Query user for deletion
+    result = await session.execute(
+        select(User).where(User.id == user_id)
+    )
     target = result.scalars().first()
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
+
     admin_count = await async_db_ops.query_admin_count()
     if target.role == Role.ADMIN and admin_count <= 1:
-        raise HTTPException(status_code=400, detail="Cannot delete the last admin user")
+        raise HTTPException(
+            status_code=400, detail="Cannot delete the last admin user")
     if target.id == user.id:
-        raise HTTPException(status_code=400, detail="Cannot delete your own account")
-    await async_db_ops.delete_user(session, target)
-    return {"message": "User deleted successfully"}
+        raise HTTPException(
+            status_code=400, detail="Cannot delete your own account")
+
+    try:
+        # Hard delete user from database
+        # This will cascade delete OAuth accounts due to foreign key constraint
+        await async_db_ops.delete_user(session, target)
+        await session.commit()
+        logger.info(
+            f"User {user_id} ({target.username or target.email}) has been deleted")
+        return {"message": "User deleted successfully"}
+    except Exception as e:
+        await session.rollback()
+        logger.error(f"Failed to delete user {user_id}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500, detail=f"Failed to delete user: {str(e)}")

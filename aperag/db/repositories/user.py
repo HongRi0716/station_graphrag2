@@ -27,7 +27,8 @@ from aperag.db.repositories.base import AsyncRepositoryProtocol
 class AsyncUserRepositoryMixin(AsyncRepositoryProtocol):
     async def query_user_quota(self, user: str, key: str):
         async def _query(session):
-            stmt = select(UserQuota).where(UserQuota.user == user, UserQuota.key == key)
+            stmt = select(UserQuota).where(
+                UserQuota.user == user, UserQuota.key == key)
             result = await session.execute(stmt)
             uq = result.scalars().first()
             return uq.quota_limit if uq else None
@@ -38,7 +39,8 @@ class AsyncUserRepositoryMixin(AsyncRepositoryProtocol):
         """Query user quota with both limit and current usage"""
 
         async def _query(session):
-            stmt = select(UserQuota).where(UserQuota.user == user, UserQuota.key == key)
+            stmt = select(UserQuota).where(
+                UserQuota.user == user, UserQuota.key == key)
             result = await session.execute(stmt)
             return result.scalars().first()
 
@@ -58,7 +60,8 @@ class AsyncUserRepositoryMixin(AsyncRepositoryProtocol):
         """Create or update user quota"""
 
         async def _operation(session):
-            stmt = select(UserQuota).where(UserQuota.user == user, UserQuota.key == key)
+            stmt = select(UserQuota).where(
+                UserQuota.user == user, UserQuota.key == key)
             result = await session.execute(stmt)
             quota = result.scalars().first()
 
@@ -142,7 +145,8 @@ class AsyncUserRepositoryMixin(AsyncRepositoryProtocol):
 
     async def create_user(self, username: str, email: str, password: str, role: Role):
         async def _operation(session):
-            user = User(username=username, email=email, password=password, role=role)
+            user = User(username=username, email=email,
+                        password=password, role=role)
             session.add(user)
             await session.flush()
             await session.refresh(user)
@@ -150,12 +154,12 @@ class AsyncUserRepositoryMixin(AsyncRepositoryProtocol):
 
         return await self.execute_with_transaction(_operation)
 
-    async def delete_user(self, user: User):
-        async def _operation(session):
-            await session.delete(user)
-            await session.flush()
-
-        return await self.execute_with_transaction(_operation)
+    async def delete_user(self, session, user: User):
+        """Hard delete user from database"""
+        # Hard delete: directly remove user from database
+        # OAuth accounts will be cascade deleted due to foreign key constraint
+        await session.delete(user)
+        await session.flush()
 
     async def query_invitation_by_token(self, token: str):
         async def _query(session):
@@ -167,7 +171,8 @@ class AsyncUserRepositoryMixin(AsyncRepositoryProtocol):
 
     async def create_invitation(self, email: str, token: str, created_by: str, role: Role):
         async def _operation(session):
-            invitation = Invitation(email=email, token=token, created_by=created_by, role=role)
+            invitation = Invitation(
+                email=email, token=token, created_by=created_by, role=role)
             session.add(invitation)
             await session.flush()
             await session.refresh(invitation)
@@ -185,7 +190,8 @@ class AsyncUserRepositoryMixin(AsyncRepositoryProtocol):
         """Query all valid invitations (not used), ordered by created_at descending."""
 
         async def _query(session):
-            stmt = select(Invitation).where(not Invitation.is_used).order_by(desc(Invitation.created_at))
+            stmt = select(Invitation).where(
+                not Invitation.is_used).order_by(desc(Invitation.created_at))
             result = await session.execute(stmt)
             return result.scalars().all()
 
@@ -193,14 +199,16 @@ class AsyncUserRepositoryMixin(AsyncRepositoryProtocol):
 
     async def query_admin_count(self):
         async def _query(session):
-            stmt = select(func.count()).select_from(User).where(User.role == Role.ADMIN, User.gmt_deleted.is_(None))
+            stmt = select(func.count()).select_from(User).where(
+                User.role == Role.ADMIN, User.gmt_deleted.is_(None))
             return await session.scalar(stmt)
 
         return await self._execute_query(_query)
 
     async def query_user_count(self):
         async def _query(session):
-            stmt = select(func.count()).select_from(User).where(User.gmt_deleted.is_(None))
+            stmt = select(func.count()).select_from(
+                User).where(User.gmt_deleted.is_(None))
             return await session.scalar(stmt)
 
         return await self._execute_query(_query)

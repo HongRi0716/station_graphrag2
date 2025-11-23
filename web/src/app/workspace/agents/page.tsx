@@ -10,6 +10,7 @@ import {
   GraduationCap,
   Library,
   PenTool,
+  Shield,
   ShieldCheck,
   TrendingUp,
   Zap,
@@ -45,13 +46,23 @@ const SPECIAL_AGENT_ROUTES: Record<string, string> = {
 const SPECIALIST_AGENTS = [
   {
     id: 'supervisor',
-    title: 'The Supervisor (值长)',
+    title: 'The Supervisor',
     description:
       '变电站总控大脑。负责意图识别、任务拆解、指挥其他专家协同工作。',
     icon: Zap,
     color: 'text-yellow-500',
     bg: 'bg-yellow-500/10',
     capabilities: ['任务编排', '综合研判', 'SOP生成'],
+  },
+  {
+    id: 'sentinel',
+    title: 'The Sentinel (巡视哨兵)',
+    description:
+      '实时视频监控分析。负责表计读数、安全帽佩戴检测、异物入侵报警。',
+    icon: Eye,
+    color: 'text-slate-500',
+    bg: 'bg-slate-500/10',
+    capabilities: ['实时监控', '表计识别', '安防检测'],
   },
   {
     id: 'archivist',
@@ -63,23 +74,13 @@ const SPECIALIST_AGENTS = [
     capabilities: ['跨库联邦搜索', '实体溯源', '档案查询'],
   },
   {
-    id: 'detective',
-    title: 'The Detective (图纸侦探)',
-    description: '电气图纸与视觉专家。擅长OCR识别、拓扑关系提取、图纸比对。',
-    icon: FileSearch,
-    color: 'text-purple-500',
-    bg: 'bg-purple-500/10',
-    capabilities: ['视觉问答', '拓扑分析', '图纸比对'],
-  },
-  {
-    id: 'sentinel',
-    title: 'The Sentinel (巡视哨兵)',
-    description:
-      '实时视频监控分析。负责表计读数、安全帽佩戴检测、异物入侵报警。',
-    icon: Eye,
-    color: 'text-slate-500',
-    bg: 'bg-slate-500/10',
-    capabilities: ['实时监控', '表计识别', '安防检测'],
+    id: 'instructor',
+    title: 'The Instructor (培训教官)',
+    description: '技能培训与考核系统。模拟倒闸操作演练，进行苏格拉底式教学。',
+    icon: GraduationCap,
+    color: 'text-indigo-500',
+    bg: 'bg-indigo-500/10',
+    capabilities: ['模拟演练', '智能评分', '安规问答'],
   },
   {
     id: 'diagnostician',
@@ -127,15 +128,6 @@ const SPECIALIST_AGENTS = [
     capabilities: ['语音转录', '表单填充', '文档生成'],
   },
   {
-    id: 'instructor',
-    title: 'The Instructor (培训教官)',
-    description: '技能培训与考核系统。模拟倒闸操作演练，进行苏格拉底式教学。',
-    icon: GraduationCap,
-    color: 'text-indigo-500',
-    bg: 'bg-indigo-500/10',
-    capabilities: ['模拟演练', '智能评分', '安规问答'],
-  },
-  {
     id: 'auditor',
     title: 'The Auditor (合规审计师)',
     description: '文档合规性审查。批量检查检修报告是否符合最新行业标准。',
@@ -143,6 +135,25 @@ const SPECIALIST_AGENTS = [
     color: 'text-rose-500',
     bg: 'bg-rose-500/10',
     capabilities: ['合规性检查', '报告生成', '自动纠错'],
+  },
+  {
+    id: 'detective',
+    title: 'The Detective (图纸侦探)',
+    description: '电气图纸与视觉专家。擅长OCR识别、拓扑关系提取、图纸比对。',
+    icon: FileSearch,
+    color: 'text-purple-500',
+    bg: 'bg-purple-500/10',
+    capabilities: ['视觉问答', '拓扑分析', '图纸比对'],
+  },
+  {
+    id: 'guardian',
+    title: 'The Guardian (电网安全卫士)',
+    description:
+      '电网安全守护者。负责保电方案制定、应急预案生成、安全风险评估。',
+    icon: Shield,
+    color: 'text-emerald-500',
+    bg: 'bg-emerald-500/10',
+    capabilities: ['保电方案', '应急预案', '风险评估'],
   },
 ];
 
@@ -177,11 +188,7 @@ export default function AgentsPage() {
         </div>
 
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {SPECIALIST_AGENTS.filter((agent) =>
-            ['supervisor', 'archivist', 'sentinel', 'instructor'].includes(
-              agent.id
-            )
-          ).map((agent) => (
+          {SPECIALIST_AGENTS.map((agent) => (
             <Card
               key={agent.id}
               className="group hover:border-primary/50 flex h-full flex-col border transition-all duration-300 hover:shadow-lg"
@@ -236,69 +243,6 @@ export default function AgentsPage() {
               </CardFooter>
             </Card>
           ))}
-        </div>
-
-        <div className="mt-12">
-          <h2 className="mb-6 text-xl font-semibold tracking-tight">
-            更多智能体
-          </h2>
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {SPECIALIST_AGENTS.filter(
-              (agent) =>
-                ![
-                  'supervisor',
-                  'archivist',
-                  'sentinel',
-                  'instructor',
-                ].includes(agent.id)
-            ).map((agent) => (
-              <Card
-                key={agent.id}
-                className="group hover:border-primary/50 flex h-full flex-col border transition-all duration-300 hover:shadow-lg"
-              >
-                <CardHeader>
-                  <div className="mb-2 flex items-start justify-between">
-                    <div
-                      className={`${agent.bg} rounded-xl p-3 ring-1 ring-black/5 ring-inset dark:ring-white/5`}
-                    >
-                      <agent.icon className={`h-6 w-6 ${agent.color}`} />
-                    </div>
-                  </div>
-                  <CardTitle className="text-lg font-semibold">
-                    {agent.title}
-                  </CardTitle>
-                  <CardDescription className="mt-2 line-clamp-3 min-h-[60px] text-xs">
-                    {agent.description}
-                  </CardDescription>
-                </CardHeader>
-
-                <CardContent className="flex-grow">
-                  <div className="flex flex-wrap gap-2">
-                    {agent.capabilities.map((cap) => (
-                      <Badge
-                        key={cap}
-                        variant="secondary"
-                        className="bg-secondary/50 px-2 py-0.5 text-[10px] font-normal"
-                      >
-                        {cap}
-                      </Badge>
-                    ))}
-                  </div>
-                </CardContent>
-
-                <CardFooter className="pt-4">
-                  <Button
-                    className="group-hover:bg-primary group-hover:text-primary-foreground w-full shadow-sm transition-colors"
-                    variant="outline"
-                    onClick={() => startAgentSession(agent.id)}
-                  >
-                    <Zap className="mr-2 h-4 w-4" />
-                    激活智能体
-                  </Button>
-                </CardFooter>
-              </Card>
-            ))}
-          </div>
         </div>
       </div>
     </PageContainer>

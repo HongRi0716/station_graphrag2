@@ -1,6 +1,7 @@
 'use client';
 
 import { CollectionView, ModelSpec } from '@/api';
+import { useAppContext } from '@/components/providers/app-provider';
 import { useCollectionContext } from '@/components/providers/collection-provider';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -145,6 +146,7 @@ export type ProviderModel = {
 export const CollectionForm = ({ action }: { action: 'add' | 'edit' }) => {
   const router = useRouter();
   const { collection, loadCollection } = useCollectionContext();
+  const { user } = useAppContext();
   const [completionModels, setCompletionModels] = useState<ProviderModel[]>();
   const [embeddingModels, setEmbeddingModels] = useState<ProviderModel[]>();
   const [availableCollections, setAvailableCollections] = useState<
@@ -530,10 +532,30 @@ export const CollectionForm = ({ action }: { action: 'add' | 'edit' }) => {
                                         : 'opacity-0',
                                     )}
                                   />
-                                  <div className="flex flex-col">
-                                    <span className="font-medium">
-                                      {col.title}
-                                    </span>
+                                  <div className="flex flex-1 flex-col">
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-medium">
+                                        {col.title}
+                                      </span>
+                                      {col.subscription_id && (
+                                        <Badge
+                                          variant="secondary"
+                                          className="text-xs"
+                                        >
+                                          {page_collections('subscribed')}
+                                        </Badge>
+                                      )}
+                                      {col.owner_user_id &&
+                                        col.owner_user_id !== user?.id &&
+                                        !col.subscription_id && (
+                                          <Badge
+                                            variant="outline"
+                                            className="text-xs"
+                                          >
+                                            {col.owner_username || 'Shared'}
+                                          </Badge>
+                                        )}
+                                    </div>
                                     {col.description && (
                                       <span className="text-muted-foreground text-xs">
                                         {col.description}

@@ -64,7 +64,8 @@ class ParserConfig(BaseModel):
     supported_extensions_override: Optional[List[str]] = Field(
         None, description="Override the supported file extensions for the parser. If None, no override."
     )
-    settings: Optional[dict[str, Any]] = Field(None, description="Other settings for the parser, e.g., API key.")
+    settings: Optional[dict[str, Any]] = Field(
+        None, description="Other settings for the parser, e.g., API key.")
 
 
 class DocParser(BaseParser):
@@ -80,12 +81,14 @@ class DocParser(BaseParser):
         # Dynamically update parser configs based on collection settings
         for cfg in self.config:
             if cfg.name == MinerUParser.name:
-                use_mineru = parser_config.get("use_mineru", False) or os.getenv("USE_MINERU_API", False)
+                use_mineru = parser_config.get(
+                    "use_mineru", False) or os.getenv("USE_MINERU_API", False)
                 if not use_mineru:
                     cfg.enabled = False
                     continue
 
-                token = parser_config.get("mineru_api_token") or os.getenv("MINERU_API_TOKEN")
+                token = parser_config.get(
+                    "mineru_api_token") or os.getenv("MINERU_API_TOKEN")
                 if token:
                     cfg.enabled = True
                     if cfg.settings is None:
@@ -95,7 +98,18 @@ class DocParser(BaseParser):
                     cfg.enabled = False
             elif cfg.name == DocRayParser.name:
                 use_doc_ray = parser_config.get("use_doc_ray", False)
-                cfg.enabled = use_doc_ray
+                # Auto-enable DocRay if DOCRAY_HOST is set (service is available)
+                # This allows DocRay to handle .doc files even if use_doc_ray is not explicitly enabled
+                from aperag.config import settings
+                docray_host = parser_config.get("docray_host") or getattr(
+                    settings, "docray_host", None) or os.getenv("DOCRAY_HOST", "")
+                if not use_doc_ray and docray_host:
+                    # Auto-enable DocRay when service is available
+                    logger.info(
+                        f"Auto-enabling DocRay parser (DOCRAY_HOST={docray_host})")
+                    cfg.enabled = True
+                else:
+                    cfg.enabled = use_doc_ray
             elif cfg.name == MarkItDownParser.name:
                 use_markitdown = parser_config.get("use_markitdown", True)
                 cfg.enabled = use_markitdown
@@ -131,7 +145,8 @@ class DocParser(BaseParser):
             return self.supported
         supported = []
         for parser_name in self.parsers.keys():
-            supported.extend(self._get_parser_supported_extensions(parser_name))
+            supported.extend(
+                self._get_parser_supported_extensions(parser_name))
         self.supported = sorted(list(set(supported)))
         return self.supported
 
@@ -146,4 +161,5 @@ class DocParser(BaseParser):
                 return parser.parse_file(path, metadata, **kwargs)
             except FallbackError as e:
                 last_err = e
-        raise ValueError(f'No parser can handle file with extension "{extension}"') from last_err
+        raise ValueError(
+            f'No parser can handle file with extension "{extension}"') from last_err

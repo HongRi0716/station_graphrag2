@@ -32,6 +32,16 @@ import { User } from '@/api';
 
 import { DataGrid, DataGridPagination } from '@/components/data-grid';
 import { useAppContext } from '@/components/providers/app-provider';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import {
@@ -39,6 +49,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { apiClient } from '@/lib/api/client';
 import { cn } from '@/lib/utils';
 import {
   BatteryMedium,
@@ -52,12 +63,14 @@ import {
 } from 'lucide-react';
 import { useFormatter, useTranslations } from 'next-intl';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { FaGithub, FaGoogle } from 'react-icons/fa6';
 import { UserQuotaAction } from './user-quota-action';
 
 export function UsersDataTable({ data }: { data: User[] }) {
   const admin_users = useTranslations('admin_users');
   const { user } = useAppContext();
+  const router = useRouter();
   const [rowSelection, setRowSelection] = React.useState({});
   const [columnVisibility, setColumnVisibility] =
     React.useState<VisibilityState>({});
@@ -71,6 +84,34 @@ export function UsersDataTable({ data }: { data: User[] }) {
     pageSize: 20,
   });
   const [searchValue, setSearchValue] = React.useState<string>('');
+  const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
+  const [userToDelete, setUserToDelete] = React.useState<User | null>(null);
+  const [isDeleting, setIsDeleting] = React.useState(false);
+
+  const handleDeleteClick = (user: User) => {
+    setUserToDelete(user);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!userToDelete || !userToDelete.id) return;
+
+    setIsDeleting(true);
+    try {
+      await apiClient.defaultApi.usersUserIdDelete({ userId: userToDelete.id });
+      setDeleteDialogOpen(false);
+      setUserToDelete(null);
+      // Refresh the page to reload user list
+      router.refresh();
+    } catch (error) {
+      console.error('Failed to delete user:', error);
+      alert(
+        `删除用户失败: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   const columns: ColumnDef<User>[] = React.useMemo(() => {
     const cols: ColumnDef<User>[] = [
@@ -210,7 +251,11 @@ export function UsersDataTable({ data }: { data: User[] }) {
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem variant="destructive" disabled>
+              <DropdownMenuItem
+                variant="destructive"
+                onClick={() => handleDeleteClick(row.original)}
+                disabled={user?.id === row.original.id}
+              >
                 <Trash /> {admin_users('user_delete')}
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -293,6 +338,34 @@ export function UsersDataTable({ data }: { data: User[] }) {
       </div>
       <DataGrid table={table} />
       <DataGridPagination table={table} />
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>确认删除用户</AlertDialogTitle>
+            <AlertDialogDescription>
+              此操作无法撤销。这将永久删除用户{' '}
+              <strong>{userToDelete?.username || userToDelete?.email}</strong>{' '}
+              及其所有数据。
+              {userToDelete?.role === 'admin' && (
+                <div className="mt-2 text-amber-600">
+                  警告：您正在删除一个管理员用户。
+                </div>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>取消</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConfirm}
+              disabled={isDeleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeleting ? '删除中...' : '确认删除'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
