@@ -665,6 +665,100 @@ class CollectionService:
         except Exception as e:
             return False, f"Failed to validate collections: {str(e)}"
 
+    async def get_preset_collections_config(self) -> dict:
+        """Get preset collections configuration from database settings."""
+        try:
+            setting = await self.db_ops.query_setting("preset_collections_config")
+            if setting and setting.value:
+                import json
+                return json.loads(setting.value) if isinstance(setting.value, str) else setting.value
+            else:
+                # Fallback to Python config file if not in database
+                from aperag.preset_collections import PRESET_COLLECTIONS, COLLECTION_CATEGORIES
+                return {
+                    "enabled": True,
+                    "auto_create_for_new_users": False,
+                    "collections": PRESET_COLLECTIONS,
+                    "categories": COLLECTION_CATEGORIES
+                }
+        except Exception as e:
+            logger.error(f"Failed to get preset collections config: {e}")
+            return {"enabled": False, "collections": [], "categories": {}}
+
+    async def create_preset_collections_for_user(
+        self, user: str, locale: str = "zh"
+    ) -> list[view_models.Collection]:
+        """
+        Create all enabled preset collections for a user.
+        
+        Args:
+            user: User ID
+            locale: Language locale ('zh' or 'en')
+            
+        Returns:
+            List of created collections
+        """
+        config = await self.get_preset_collections_config()
+        
+        if not config.get("enabled", False):
+            logger.info("Preset collections are disabled in configuration")
+            return []
+        
+        created_collections = []
+        collections_data = config.get("collections", [])
+        
+        for preset in collections_data:
+            if not preset.get("auto_create", True):
+                continue
+            
+            try:
+                # Determine title and description based on locale
+                title = preset.get(f"title_{locale}", preset.get("title_zh", ""))
+                description = preset.get(f"description_{locale}", preset.get("description_zh", ""))
+                
+                # Create collection
+                collection_create = view_models.CollectionCreate(
+                    title=title,
+                    description=description,
+                    type=db_models.CollectionType.DOCUMENT,
+                    config=view_models.CollectionConfig(
+                        enable_summary=False,
+                        enable_kg=True,
+                        enable_vision=False,
+                    )
+                )
+                
+                created = await self.create_collection(user, collection_create)
+                created_collections.append(created)
+                logger.info(f"Created preset collection '{title}' for user {user}")
+                
+            except Exception as e:
+                logger.error(f"Failed to create preset collection {preset.get('id')}: {e}", exc_info=True)
+                continue
+        
+        return created_collections
+
+    async def update_preset_collections_config(self, config: dict) -> bool:
+        """
+        Update preset collections configuration in database.
+        
+        Args:
+            config: New configuration dict
+            
+        Returns:
+            True if successful
+        """
+        try:
+            import json
+            await self.db_ops.upsert_setting(
+                "preset_collections_config",
+                json.dumps(config) if isinstance(config, dict) else config
+            )
+            return True
+        except Exception as e:
+            logger.error(f"Failed to update preset collections config: {e}")
+            return False
+
     async def test_mineru_token(self, token: str) -> dict:
         """Test the MinerU API token."""
         async with httpx.AsyncClient() as client:

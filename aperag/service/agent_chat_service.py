@@ -14,9 +14,12 @@
 
 # pyright: reportMissingImports=false
 
+import json
 import logging
 import uuid
 from typing import Any, AsyncGenerator, Dict, Optional
+
+from fastapi import WebSocket, WebSocketDisconnect
 
 try:
     from aperag.agent.core.models import AgentRole, AgentState, AgentThinkingStep
@@ -143,3 +146,72 @@ class AgentChatService:
         """
         response = await self.chat(query, "user", session_id)
         yield response["answer"]
+
+    async def handle_websocket_agent_chat(
+        self, websocket: WebSocket, user: str, bot_id: str, chat_id: str
+    ):
+        """
+        兼容旧版接口：通过 WebSocket 直接驱动新的 Agent 流程
+        """
+        session_id = chat_id or str(uuid.uuid4())
+
+        async def send_error(message: str):
+            await websocket.send_json({"type": "error", "data": message})
+
+        try:
+            while True:
+                try:
+                    payload_raw = await websocket.receive_text()
+                except WebSocketDisconnect:
+                    break
+
+                try:
+                    payload = json.loads(payload_raw or "{}")
+                except json.JSONDecodeError:
+                    await send_error("Invalid JSON payload.")
+                    continue
+
+                query = (
+                    payload.get("query")
+                    or payload.get("message")
+                    or payload.get("data")
+                    or ""
+                ).strip()
+
+                if not query:
+                    await send_error("Query is required.")
+                    continue
+
+                agent_id = (
+                    payload.get("agent")
+                    or payload.get("agent_id")
+                    or payload.get("role")
+                    or "supervisor"
+                )
+                session_override = payload.get("session_id") or session_id
+
+                response = await self.chat(
+                    query=query,
+                    user_id=user,
+                    session_id=session_override,
+                    agent_id=agent_id,
+                )
+
+                await websocket.send_json(
+                    {
+                        "type": "message",
+                        "id": payload.get("message_id") or str(uuid.uuid4()),
+                        "data": response.get("answer", ""),
+                        "plan": response.get("plan"),
+                        "thoughts": response.get("thoughts"),
+                        "agent_id": response.get("agent_id"),
+                        "session_id": response.get("session_id"),
+                    }
+                )
+
+                if payload.get("once") or payload.get("mode") == "single":
+                    break
+
+        finally:
+            # 调用方负责关闭 WebSocket，这里不重复关闭
+            pass

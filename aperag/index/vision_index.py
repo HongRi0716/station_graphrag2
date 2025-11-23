@@ -244,26 +244,20 @@ class VisionIndexer(BaseIndexer):
         # Path B: Vision-to-Text
         if completion_svc and completion_svc.is_vision_model():
             try:
+                # Get adaptive prompt based on collection type
+                from aperag.index.vision_prompts import get_vision_prompt_for_collection
+                
+                prompt = get_vision_prompt_for_collection(
+                    collection.title,
+                    collection.description or ""
+                )
+                logger.info(f"Using adaptive vision prompt for collection '{collection.title}'")
+                
                 text_nodes: List[TextNode] = []
                 for part in image_parts:
                     b64_image = base64.b64encode(part.data).decode("utf-8")
                     mime_type = part.mime_type or "image/png"
                     data_uri = f"data:{mime_type};base64,{b64_image}"
-
-                    prompt = """Extract key information from the image for RAG retrieval and knowledge graph extraction. Focus on precise entity and relationship extraction.
-## Requirements
-1. **Entities (Equipment & Components)**: Extract ALL unique entities with clear identification
-
-2. **Relationships**: Extract ALL connection relationships with explicit entity pairs:
-   - **Format**: Use clear subject-verb-object structure: "EntityA connects to EntityB" or "EntityA通过EntityB连接到EntityC"
-   - **Relationship Types**: connects_to, passes_through, supplies, receives_from, controls, etc.
-   - **Be explicit**: Always mention both entity names in each relationship
-## Rules
-- **Complete extraction** - extract all entities and relationships, no omissions
-- **No duplicates** - each entity and relationship appears only once
-- **Entity naming**: Use exact names/IDs as shown in the image, preserve original language
-- **Relationship clarity**: Each relationship must explicitly mention both entities
-- **Structured format**: Use consistent format for easy parsing"""
 
                     description = None
                     max_retries = 3

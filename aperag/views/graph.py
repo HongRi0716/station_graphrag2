@@ -158,3 +158,167 @@ async def export_kg_eval_view(
         raise HTTPException(status_code=404, detail="Collection not found")
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/graphs/search/global", tags=["graph"])
+async def global_graph_search_view(
+    request: Request,
+    query: str = Body(..., embed=True),
+    top_k: int = Body(100, embed=True),
+    user: User = Depends(required_user),
+) -> Dict[str, Any]:
+    """Search for entities across all collections (Global Graph)"""
+    from aperag.db.ops import async_db_ops
+    from aperag.graph import lightrag_manager
+    from aperag.schema.utils import parseCollectionConfig
+
+    # 1. Get any collection to initialize LightRAG (we need LLM config)
+    # We try to find a collection with knowledge graph enabled
+    collections = await async_db_ops.query_collections(user, page=1, page_size=10)
+    target_collection = None
+    
+    for col in collections:
+        config = parseCollectionConfig(col.config)
+        if config.enable_knowledge_graph:
+            target_collection = col
+            break
+            
+    if not target_collection and collections:
+        target_collection = collections[0]
+        
+    if not target_collection:
+        return {"entities": [], "message": "No collections found to initialize graph search"}
+
+    try:
+        # 2. Initialize LightRAG
+        rag = await lightrag_manager.create_lightrag_instance(target_collection)
+        
+        # 3. Execute Global Search with Graph Data
+        graph_data = await rag.get_global_graph_data(query=query, top_k=top_k)
+        
+        return graph_data
+        
+    except Exception as e:
+        logger.error(f"Global graph search failed: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Global search failed: {str(e)}")
+
+
+@router.post("/graphs/hierarchy/global", tags=["graph"])
+async def global_graph_hierarchy_view(
+    request: Request,
+    query: str = Body("", embed=True),
+    top_k: int = Body(100, embed=True),
+    user: User = Depends(required_user),
+) -> Dict[str, Any]:
+    """Get hierarchical graph data showing Collection -> Document -> Entity relationships"""
+    from aperag.db.ops import async_db_ops, db_ops
+    from aperag.schema.utils import parseCollectionConfig
+
+    try:
+        # 1. Get user's collections
+        collections = await async_db_ops.query_collections([str(user.id)])
+        
+        if not collections:
+            return {"nodes": [], "edges": []}
+
+        # Build nodes and edges
+        nodes = []
+        edges = []
+        
+        # Add Collection nodes
+        collection_ids = []
+        for col in collections:
+            collection_ids.append(col.id)
+            nodes.append({
+                "id": f"col_{col.id}",
+                "type": "collection",
+                "name": col.title,
+                "description": col.description or "",
+                "metadata": {
+                    "collection_id": col.id,
+                    "created_at": int(col.gmt_created.timestamp()) if col.gmt_created else None
+                }
+            })
+
+        # 2. Get documents for these collections
+        documents = await async_db_ops.query_documents_by_collection_ids(str(user.id), collection_ids)
+        
+        document_id_to_collection = {}
+        for doc in documents:
+            doc_id = doc.id
+            document_id_to_collection[doc_id] = doc.collection_id
+            
+            nodes.append({
+                "id": f"doc_{doc_id}",
+                "type": "document",
+                "name": doc.name,
+                "metadata": {
+                    "document_id": doc_id,
+                    "collection_id": doc.collection_id,
+                    "size": doc.size,
+                    "created_at": int(doc.gmt_created.timestamp()) if doc.gmt_created else None
+                }
+            })
+            
+            # Add CONTAINS edge: Collection -> Document
+            edges.append({
+                "source": f"col_{doc.collection_id}",
+                "target": f"doc_{doc_id}",
+                "type": "CONTAINS",
+                "label": "contains"
+            })
+
+        # 3. Get entities with document information
+        # Use the new repository method to get entities with their document IDs
+        entity_results = db_ops.query_entities_with_document_info_global(
+            entity_names=None,  # Get all entities
+            top_k=top_k
+        )
+        
+        # Filter entities: only include those whose documents belong to user's collections
+        user_doc_ids = {doc.id for doc in documents}
+        
+        for entity_row in entity_results:
+            entity_id = entity_row.id
+            entity_name = entity_row.entity_name
+            workspace = entity_row.workspace
+            document_ids = entity_row.document_ids or []
+            
+            # Filter to only user's documents
+            relevant_doc_ids = [doc_id for doc_id in document_ids if doc_id in user_doc_ids]
+            
+            if not relevant_doc_ids:
+                continue  # Skip entities not in user's documents
+            
+            # Add Entity node
+            nodes.append({
+                "id": f"ent_{workspace}_{entity_id}",
+                "type": "entity",
+                "name": entity_name,
+                "metadata": {
+                    "entity_id": entity_id,
+                    "workspace": workspace,
+                    "content": entity_row.content or "",
+                    "created_at": int(entity_row.create_time.timestamp()) if entity_row.create_time else None
+                }
+            })
+            
+            # Add EXTRACTED_FROM edges: Document -> Entity
+            for doc_id in relevant_doc_ids:
+                edges.append({
+                    "source": f"doc_{doc_id}",
+                    "target": f"ent_{workspace}_{entity_id}",
+                    "type": "EXTRACTED_FROM",
+                    "label": "extracted"
+                })
+
+        return {
+            "nodes": nodes,
+            "edges": edges
+        }
+        
+    except Exception as e:
+        logger.error(f"Hierarchical graph query failed: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Hierarchical graph query failed: {str(e)}")

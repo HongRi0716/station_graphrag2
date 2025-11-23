@@ -28,6 +28,20 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 
+const SPECIAL_AGENT_ROUTES: Record<string, string> = {
+  detective: '/workspace/agents/specific/detective',
+  diagnostician: '/workspace/agents/specific/diagnostician',
+  calculator: '/workspace/agents/specific/calculator',
+  supervisor: '/workspace/agents/specific/supervisor',
+  archivist: '/workspace/agents/specific/archivist',
+  gatekeeper: '/workspace/agents/specific/gatekeeper',
+  sentinel: '/workspace/agents/specific/sentinel',
+  prophet: '/workspace/agents/specific/prophet',
+  scribe: '/workspace/agents/specific/scribe',
+  instructor: '/workspace/agents/specific/instructor',
+  guardian: '/workspace/agents/specific/guardian',
+};
+
 const SPECIALIST_AGENTS = [
   {
     id: 'supervisor',
@@ -136,7 +150,11 @@ export default function AgentsPage() {
   const router = useRouter();
 
   const startAgentSession = (agentId: string) => {
-    router.push(`/workspace/chat?agent=${agentId}&new_session=true`);
+    if (SPECIAL_AGENT_ROUTES[agentId]) {
+      router.push(SPECIAL_AGENT_ROUTES[agentId]);
+    } else {
+      router.push(`/workspace/chat?agent=${agentId}&new_session=true`);
+    }
   };
 
   return (
@@ -159,7 +177,11 @@ export default function AgentsPage() {
         </div>
 
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {SPECIALIST_AGENTS.map((agent) => (
+          {SPECIALIST_AGENTS.filter((agent) =>
+            ['supervisor', 'archivist', 'sentinel', 'instructor'].includes(
+              agent.id
+            )
+          ).map((agent) => (
             <Card
               key={agent.id}
               className="group hover:border-primary/50 flex h-full flex-col border transition-all duration-300 hover:shadow-lg"
@@ -214,6 +236,69 @@ export default function AgentsPage() {
               </CardFooter>
             </Card>
           ))}
+        </div>
+
+        <div className="mt-12">
+          <h2 className="mb-6 text-xl font-semibold tracking-tight">
+            更多智能体
+          </h2>
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {SPECIALIST_AGENTS.filter(
+              (agent) =>
+                ![
+                  'supervisor',
+                  'archivist',
+                  'sentinel',
+                  'instructor',
+                ].includes(agent.id)
+            ).map((agent) => (
+              <Card
+                key={agent.id}
+                className="group hover:border-primary/50 flex h-full flex-col border transition-all duration-300 hover:shadow-lg"
+              >
+                <CardHeader>
+                  <div className="mb-2 flex items-start justify-between">
+                    <div
+                      className={`${agent.bg} rounded-xl p-3 ring-1 ring-black/5 ring-inset dark:ring-white/5`}
+                    >
+                      <agent.icon className={`h-6 w-6 ${agent.color}`} />
+                    </div>
+                  </div>
+                  <CardTitle className="text-lg font-semibold">
+                    {agent.title}
+                  </CardTitle>
+                  <CardDescription className="mt-2 line-clamp-3 min-h-[60px] text-xs">
+                    {agent.description}
+                  </CardDescription>
+                </CardHeader>
+
+                <CardContent className="flex-grow">
+                  <div className="flex flex-wrap gap-2">
+                    {agent.capabilities.map((cap) => (
+                      <Badge
+                        key={cap}
+                        variant="secondary"
+                        className="bg-secondary/50 px-2 py-0.5 text-[10px] font-normal"
+                      >
+                        {cap}
+                      </Badge>
+                    ))}
+                  </div>
+                </CardContent>
+
+                <CardFooter className="pt-4">
+                  <Button
+                    className="group-hover:bg-primary group-hover:text-primary-foreground w-full shadow-sm transition-colors"
+                    variant="outline"
+                    onClick={() => startAgentSession(agent.id)}
+                  >
+                    <Zap className="mr-2 h-4 w-4" />
+                    激活智能体
+                  </Button>
+                </CardFooter>
+              </Card>
+            ))}
+          </div>
         </div>
       </div>
     </PageContainer>

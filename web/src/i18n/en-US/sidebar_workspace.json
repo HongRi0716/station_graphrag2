@@ -1,17 +1,22 @@
 {
-  "repositories": "Repositories",
-  "marketplace": "Public Collection",
-  "collections": "Collections",
-  "bots": "Bots",
-  "chats": "Chats",
-  "chats_new": "Create chat",
-  "display_empty_title": "New chat",
-
-  "more": "More",
+  "knowledge_base": "Knowledge",
+  "my_collections": "My Collections",
+  "public_collections": "Public Collections",
+  "global_graph": "Global Knowledge Graph",
+  "chat": "Chat",
+  "agents": "Agents",
+  "agent_supervisor": "Supervisor",
+  "agent_detective": "Detective",
+  "agent_gatekeeper": "Gatekeeper",
+  "agent_archivist": "Archivist",
+  "agent_sentinel": "Sentinel",
+  "agent_diagnostician": "Diagnostician",
+  "agent_instructor": "Instructor",
+  "agent_prophet": "Prophet",
+  "agent_auditor": "Auditor",
+  "more_agents": "More agents",
+  "create_collection": "New collection",
+  "recent_chats": "Recent chats",
   "settings": "Settings",
-
-  "models": "Models",
-  "api_keys": "API Keys",
-  "audit_logs": "Audit Logs",
-  "quotas": "Quotas"
+  "preset_collections": "Preset Collections"
 }

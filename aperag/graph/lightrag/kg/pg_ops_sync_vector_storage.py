@@ -310,6 +310,77 @@ class PGOpsSyncVectorStorage(BaseVectorStorage):
 
         return await asyncio.to_thread(_sync_query)
 
+    async def query_global(self, query: str, top_k: int) -> list[dict[str, Any]]:
+        """Query vectors by similarity across ALL workspaces (Global Search)"""
+        # Compute embedding for query
+        embeddings = await self.embedding_func([query])
+        embedding = embeddings[0]
+
+        def _sync_query_global():
+            # Import here to avoid circular imports
+            from aperag.db.ops import db_ops
+            from aperag.graph.lightrag.namespace import NameSpace, is_namespace
+
+            # Convert embedding to list if it's numpy array
+            if hasattr(embedding, "tolist"):
+                embedding_list = embedding.tolist()
+            else:
+                embedding_list = list(embedding)
+
+            if is_namespace(self.namespace, NameSpace.VECTOR_STORE_ENTITIES):
+                results = db_ops.query_lightrag_vdb_entity_similarity_global(
+                    embedding_list, top_k, self.cosine_better_than_threshold
+                )
+                # Convert results to expected format for entities
+                formatted_results = []
+                for result in results:
+                    if hasattr(result, "_asdict"):
+                        row_dict = result._asdict()
+                    elif isinstance(result, dict):
+                        row_dict = result
+                    else:
+                        row_dict = {key: getattr(result, key) for key in result.keys()}
+
+                    formatted_results.append(
+                        {
+                            "entity_name": row_dict.get("entity_name"),
+                            "created_at": row_dict.get("created_at"),
+                            "workspace": row_dict.get("workspace"),  # Include workspace for global search
+                        }
+                    )
+                return formatted_results
+            else:
+                logger.warning(f"Global query not supported/implemented for namespace: {self.namespace}")
+                return []
+
+        return await asyncio.to_thread(_sync_query_global)
+
+    async def get_relations_for_entities_global(self, entity_names: list[str]) -> list[dict[str, Any]]:
+        """Get relations for a list of entities across ALL workspaces"""
+        
+        def _sync_get_relations():
+            from aperag.db.ops import db_ops
+            from aperag.graph.lightrag.namespace import NameSpace, is_namespace
+
+            if is_namespace(self.namespace, NameSpace.VECTOR_STORE_RELATIONSHIPS):
+                models = db_ops.query_lightrag_vdb_relation_by_entity_names_global(entity_names)
+                return [
+                    {
+                        "id": model.id,
+                        "source_id": model.source_id,
+                        "target_id": model.target_id,
+                        "content": model.content or "",
+                        "workspace": model.workspace,
+                        "created_at": int(model.create_time.timestamp()) if model.create_time else None,
+                    }
+                    for model in models
+                ]
+            else:
+                logger.warning(f"Global relation query not supported for namespace: {self.namespace}")
+                return []
+
+        return await asyncio.to_thread(_sync_get_relations)
+
     async def delete(self, ids: list[str]) -> None:
         """Delete vectors with specified IDs from the storage."""
 

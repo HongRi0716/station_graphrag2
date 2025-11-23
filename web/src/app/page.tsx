@@ -107,7 +107,7 @@ export default function Home() {
                 asChild
                 className="h-12 border-sky-500/50 px-8 text-base hover:bg-sky-500/10"
               >
-                <Link href="/marketplace">
+                <Link href="/workspace/agents">
                   探索智能工具
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Link>

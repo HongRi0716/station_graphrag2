@@ -348,7 +348,9 @@
       "title": "Knowledge Graph"
     },
     "node_group": "Node Group",
-    "node_search": "Node search",
+    "search": "Search",
+    "search_placeholder": "Search global entities...",
+    "node_search": "Node Search",
     "no_nodes_found": "No node information found",
     "merge_infomation": "{count} merge suggestions",
     "merge_suggestions": "Merge suggestions",
@@ -511,8 +513,29 @@
     "summary_search": "Summary"
   },
   "sidebar_workspace": {
+    "knowledge_base": "Knowledge",
+    "my_collections": "My Collections",
+    "public_collections": "Public Collections",
+    "global_graph": "Global Knowledge Graph",
+    "chat": "Chat",
+    "agents": "Agents",
+    "agent_supervisor": "Substation Control Center",
+    "agent_detective": "Drawing Recognition & Comparison",
+    "agent_gatekeeper": "Safety Access Control",
+    "agent_archivist": "Equipment Archive Manager",
+    "agent_calculator": "Relay Protection Calculator",
+    "agent_sentinel": "Equipment Inspection Robot",
+    "agent_instructor": "O&M Training Instructor",
+    "agent_scribe": "Inspection Record Clerk",
+    "agent_diagnostician": "Fault Diagnosis Expert",
+    "agent_prophet": "Equipment State Predictor",
+    "agent_guardian": "Grid Security Guardian",
+    "agent_auditor": "Auditor",
+    "more_agents": "More agents",
+    "create_collection": "New collection",
+    "recent_chats": "Recent chats",
     "repositories": "Repositories",
-    "marketplace": "Public Collection",
+    "marketplace": "Public Collections",
     "collections": "Collections",
     "bots": "Bots",
     "chats": "Chats",
@@ -523,6 +546,7 @@
     "models": "Models",
     "api_keys": "API Keys",
     "audit_logs": "Audit Logs",
-    "quotas": "Quotas"
+    "quotas": "Quotas",
+    "marketplace_title": "Marketplace"
   }
 }

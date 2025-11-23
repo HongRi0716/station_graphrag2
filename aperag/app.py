@@ -55,6 +55,7 @@ from aperag.views.marketplace_collections import router as marketplace_collectio
 from aperag.views.openai import router as openai_router
 from aperag.views.settings import router as settings_router
 from aperag.views.web import router as web_router
+from aperag.views.preset_collections_admin import router as preset_collections_admin_router
 
 # Initialize MCP server integration with stateless HTTP to fix OpenAI tool call sequence issues
 mcp_app = mcp_server.http_app(path="/", stateless_http=True)
@@ -96,14 +97,17 @@ async def health_check():
 
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(main_router, prefix="/api/v1")
-app.include_router(collections_router, prefix="/api/v1")  # Add collections router
+# Add collections router
+app.include_router(collections_router, prefix="/api/v1")
 app.include_router(api_key_router, prefix="/api/v1")
 app.include_router(audit_router, prefix="/api/v1")  # Add audit router
 app.include_router(flow_router, prefix="/api/v1")
 app.include_router(llm_router, prefix="/api/v1")
 app.include_router(graph_router, prefix="/api/v1")
-app.include_router(marketplace_router, prefix="/api/v1")  # Add marketplace router
-app.include_router(marketplace_collections_router, prefix="/api/v1")  # Add marketplace collections router
+# Add marketplace router
+app.include_router(marketplace_router, prefix="/api/v1")
+# Add marketplace collections router
+app.include_router(marketplace_collections_router, prefix="/api/v1")
 app.include_router(settings_router, prefix="/api/v1")
 app.include_router(web_router, prefix="/api/v1")  # Add web search router
 app.include_router(evaluation_router, prefix="/api/v1")
@@ -111,6 +115,7 @@ app.include_router(bot_router, prefix="/api/v1")
 app.include_router(chat_router, prefix="/api/v1")
 app.include_router(openai_router, prefix="/v1")
 app.include_router(config_router, prefix="/api/v1/config")
+app.include_router(preset_collections_admin_router, prefix="/api/v1")  # Add preset collections admin router
 
 # Only include test router in dev mode
 if os.environ.get("DEPLOYMENT_MODE") == "dev":

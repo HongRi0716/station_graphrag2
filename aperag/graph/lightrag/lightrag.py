@@ -799,6 +799,129 @@ class LightRAG:
                 logger.error(f"Graph indexing failed: {str(e)}", exc_info=True)
             raise e
 
+    async def query_global(self, query: str, top_k: int = 100) -> list[dict[str, Any]]:
+        """
+        Global search across all workspaces.
+        Currently only supports entity search.
+        """
+        if not self.entities_vdb:
+            logger.warning("Entity vector storage not initialized")
+            return []
+        
+        # Check if storage supports global query
+        if not hasattr(self.entities_vdb, "query_global"):
+            logger.warning("Storage does not support global query")
+            return []
+
+        return await self.entities_vdb.query_global(query, top_k)
+
+    async def get_global_graph_data(self, query: str, top_k: int = 100) -> dict[str, Any]:
+        """
+        Get global graph data including nodes, edges, and federation links.
+        """
+        if not self.entities_vdb or not self.relationships_vdb:
+            logger.warning("Vector storage not initialized")
+            return {"nodes": [], "edges": []}
+
+        # 1. Get global entities
+        entities = await self.query_global(query, top_k)
+        if not entities:
+            return {"nodes": [], "edges": []}
+
+        # 2. Get relationships for these entities
+        entity_names = list(set([e["entity_name"] for e in entities]))
+        
+        # Check if storage supports global relation query
+        real_edges = []
+        if hasattr(self.relationships_vdb, "get_relations_for_entities_global"):
+            real_edges = await self.relationships_vdb.get_relations_for_entities_global(entity_names)
+        
+        # 3. Federation Logic: Generate SAME_AS links
+        federation_edges = []
+        
+        # Group entities by name to find duplicates across workspaces
+        entities_by_name = {}
+        for i, entity in enumerate(entities):
+            # Assign a temporary ID for visualization if not present
+            if "id" not in entity:
+                entity["id"] = f"node_{i}"
+            
+            name = entity["entity_name"]
+            if name not in entities_by_name:
+                entities_by_name[name] = []
+            entities_by_name[name].append(entity)
+
+        # Create links between identical entities
+        for name, group in entities_by_name.items():
+            if len(group) > 1:
+                # Link all instances to the first one (star topology) or chain them
+                # Let's chain them for simplicity: 0->1, 1->2, etc.
+                for i in range(len(group) - 1):
+                    source = group[i]
+                    target = group[i+1]
+                    federation_edges.append({
+                        "source": source["id"],
+                        "target": target["id"],
+                        "label": "SAME_AS",
+                        "type": "federation",
+                        "workspace": "GLOBAL"
+                    })
+
+        # 4. Map real edges to node IDs
+        # Real edges use entity names as source/target. We need to map them to the specific node IDs we returned.
+        # Since we might have multiple nodes with the same name (different workspaces), 
+        # we should ideally link to the node in the same workspace.
+        # However, the relationship storage might not have workspace info for the edge itself easily accessible 
+        # or the edge might be between entities in the same workspace.
+        
+        # For visualization, if we have multiple nodes for "Transformer", and an edge "Transformer" -> "LLM",
+        # we need to decide which "Transformer" node and which "LLM" node to connect.
+        # A simple heuristic: Connect to ALL nodes with that name.
+        
+        final_edges = []
+        
+        # Add Federation Edges
+        final_edges.extend(federation_edges)
+        
+        # Process Real Edges
+        for edge in real_edges:
+            source_name = edge["source_id"]
+            target_name = edge["target_id"]
+            
+            source_nodes = entities_by_name.get(source_name, [])
+            target_nodes = entities_by_name.get(target_name, [])
+            
+            # If edge has workspace, try to match specific nodes
+            edge_workspace = edge.get("workspace")
+            
+            for s_node in source_nodes:
+                for t_node in target_nodes:
+                    # If edge has workspace, only link nodes in that workspace (if they match)
+                    # If edge workspace is unknown, or nodes match the edge workspace, link them.
+                    if edge_workspace:
+                        if s_node.get("workspace") == edge_workspace and t_node.get("workspace") == edge_workspace:
+                            final_edges.append({
+                                "source": s_node["id"],
+                                "target": t_node["id"],
+                                "label": edge.get("content", "related"),
+                                "type": "real",
+                                "workspace": edge_workspace
+                            })
+                    else:
+                        # Fallback: Link all combinations (might be messy but ensures connectivity)
+                        final_edges.append({
+                            "source": s_node["id"],
+                            "target": t_node["id"],
+                            "label": edge.get("content", "related"),
+                            "type": "real",
+                            "workspace": edge.get("workspace", "unknown")
+                        })
+
+        return {
+            "nodes": entities,
+            "edges": final_edges
+        }
+
     # ============= End of New Stateless Interfaces =============
 
     async def aquery_context(

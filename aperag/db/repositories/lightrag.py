@@ -417,6 +417,105 @@ class LightragRepositoryMixin(SyncRepositoryProtocol):
 
         return self._execute_query(_query)
 
+    def query_lightrag_vdb_entity_similarity_global(
+        self, embedding: list, top_k: int, threshold: float = 0.2
+    ):
+        """Query similar entities using vector similarity across ALL workspaces (Global Search)"""
+
+        def _query(session):
+            from sqlalchemy import text
+
+            # Convert embedding to PostgreSQL array format
+            embedding_string = ",".join(map(str, embedding))
+
+            # Query without workspace filter
+            sql = text(
+                """
+                SELECT entity_name, workspace, EXTRACT(EPOCH FROM create_time)::BIGINT as created_at,
+                        1 - (content_vector <=> '[:embedding]'::vector) as distance
+                FROM lightrag_vdb_entity
+                WHERE 1 - (content_vector <=> '[:embedding]'::vector) > :threshold
+                ORDER BY distance DESC
+                LIMIT :top_k
+            """.replace(":embedding", embedding_string)
+            )
+
+            result = session.execute(sql, {"threshold": threshold, "top_k": top_k})
+
+            # Properly convert SQLAlchemy Row objects to dictionaries
+            return [dict(row._mapping) for row in result]
+
+        return self._execute_query(_query)
+
+    def query_lightrag_vdb_relation_by_entity_names_global(self, entity_names: list):
+        """Query relations where source or target is in entity_names across ALL workspaces"""
+
+        def _query(session):
+            from sqlalchemy import or_, select, text
+
+            if not entity_names:
+                return []
+
+            # Use text SQL for better performance with array overlap or IN clause
+            # Assuming entity_names is a list of strings
+            
+            # We need to be careful with SQL injection if we construct raw SQL, 
+            # but using bind parameters with IN clause is safe in SQLAlchemy.
+            
+            stmt = select(LightRAGVDBRelationModel).where(
+                or_(
+                    LightRAGVDBRelationModel.source_id.in_(entity_names),
+                    LightRAGVDBRelationModel.target_id.in_(entity_names)
+                )
+            )
+            
+            result = session.execute(stmt)
+            return result.scalars().all()
+
+        return self._execute_query(_query)
+
+    def query_entities_with_document_info_global(self, entity_names: list[str] = None, top_k: int = 100):
+        """Query entities with their document information across all workspaces"""
+
+        def _query(session):
+            from sqlalchemy import select, func
+            from sqlalchemy.orm import aliased
+
+            # Join entities with chunks to get document IDs
+            # Entity has chunk_ids array, we need to unnest and join with chunks
+            query = select(
+                LightRAGVDBEntityModel.id,
+                LightRAGVDBEntityModel.workspace,
+                LightRAGVDBEntityModel.entity_name,
+                LightRAGVDBEntityModel.content,
+                LightRAGVDBEntityModel.chunk_ids,
+                func.array_agg(func.distinct(LightRAGDocChunksModel.full_doc_id)).label('document_ids'),
+                LightRAGVDBEntityModel.create_time
+            ).select_from(LightRAGVDBEntityModel).outerjoin(
+                LightRAGDocChunksModel,
+                (LightRAGDocChunksModel.workspace == LightRAGVDBEntityModel.workspace) &
+                (LightRAGDocChunksModel.id == func.any(LightRAGVDBEntityModel.chunk_ids))
+            )
+
+            # Filter by entity names if provided
+            if entity_names:
+                query = query.where(LightRAGVDBEntityModel.entity_name.in_(entity_names))
+
+            # Group by entity to aggregate document IDs
+            query = query.group_by(
+                LightRAGVDBEntityModel.id,
+                LightRAGVDBEntityModel.workspace,
+                LightRAGVDBEntityModel.entity_name,
+                LightRAGVDBEntityModel.content,
+                LightRAGVDBEntityModel.chunk_ids,
+                LightRAGVDBEntityModel.create_time
+            ).limit(top_k)
+
+            result = session.execute(query)
+            return result.all()
+
+        return self._execute_query(_query)
+
     def query_lightrag_vdb_relation_similarity(
         self, workspace: str, embedding: list, top_k: int, doc_ids: list = None, threshold: float = 0.2
     ):

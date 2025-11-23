@@ -8,7 +8,13 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from '@/components/ui/sidebar';
-import { BatteryMedium, Logs, MonitorCog, Package } from 'lucide-react';
+import {
+  BatteryMedium,
+  Database,
+  Logs,
+  MonitorCog,
+  Package,
+} from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -66,6 +72,17 @@ export const AdminSideBarMenu = () => {
             >
               <Link href="/admin/configuration">
                 <MonitorCog /> {admin_config('metadata.title')}
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              asChild
+              isActive={pathname.match('/admin/preset-collections') !== null}
+            >
+              <Link href="/admin/preset-collections">
+                <Database /> 预设知识库
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>

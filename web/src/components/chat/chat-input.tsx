@@ -261,11 +261,16 @@ export const ChatInput = ({
       return;
     }
 
+    // Check if global knowledge base is selected
+    const isGlobalSearch = selectedCollections.includes('__GLOBAL__');
+
     const data = {
       query: _query,
-      collections: collections.filter((c) =>
-        selectedCollections.some((id) => c.id === id),
-      ),
+      collections: isGlobalSearch
+        ? [] // Empty array triggers global search
+        : collections.filter((c) =>
+            selectedCollections.some((id) => c.id === id),
+          ),
       completion: {
         model: modelName,
         model_service_provider: provider?.name || '',
@@ -321,7 +326,9 @@ export const ChatInput = ({
   }, [modelName, providerModels, setModelName]);
 
   const enabledColelctions = useMemo(() => {
-    return collections.filter((c) => !selectedCollections.includes(c.id || ''));
+    return collections.filter(
+      (c) => !selectedCollections.includes(c.id || '') && c.id !== '__GLOBAL__', // Exclude the special global ID
+    );
   }, [collections, selectedCollections]);
 
   return (
@@ -456,6 +463,24 @@ export const ChatInput = ({
                 />
               </MentionInput>
               <MentionContent className="w-60">
+                {/* Global Knowledge Base Option */}
+                <MentionItem
+                  key="__GLOBAL__"
+                  value="__GLOBAL__"
+                  className="flex-col items-start gap-0.5 border-b"
+                >
+                  <div className="flex items-center gap-2">
+                    <Globe className="text-primary h-4 w-4" />
+                    <span className="text-sm font-medium">
+                      {page_chat('global_knowledge_base' as any)}
+                    </span>
+                  </div>
+                  <span className="text-muted-foreground text-xs">
+                    {page_chat('global_knowledge_base_desc' as any)}
+                  </span>
+                </MentionItem>
+
+                {/* Regular Collections */}
                 {enabledColelctions.length ? (
                   enabledColelctions.map((collection) => (
                     <MentionItem
