@@ -26,6 +26,14 @@ import type { FailResponse } from '../models';
 // @ts-ignore
 import type { GraphLabelsResponse } from '../models';
 // @ts-ignore
+import type { GraphsHierarchyGlobalPost200Response } from '../models';
+// @ts-ignore
+import type { GraphsHierarchyGlobalPostRequest } from '../models';
+// @ts-ignore
+import type { GraphsSearchGlobalPost200Response } from '../models';
+// @ts-ignore
+import type { GraphsSearchGlobalPostRequest } from '../models';
+// @ts-ignore
 import type { KnowledgeGraph } from '../models';
 // @ts-ignore
 import type { MergeSuggestionsRequest } from '../models';
@@ -270,6 +278,84 @@ export const GraphApiAxiosParamCreator = function (configuration?: Configuration
                 options: localVarRequestOptions,
             };
         },
+        /**
+         * Get hierarchical graph data showing the relationships between Collections, Documents, and Entities. This provides a top-down view of the entire knowledge graph structure.  The hierarchy structure: - Collection nodes: Root level, representing each knowledge base - Document nodes: Child of collections, representing source documents - Entity nodes: Extracted from documents, representing knowledge graph entities  Edges show: - CONTAINS: Collection -> Document - EXTRACTED_FROM: Document -> Entity  This is useful for: - Understanding data provenance - Navigating from collections to specific entities - Visualizing the overall structure of the knowledge base 
+         * @summary Get hierarchical global graph (Collections -> Documents -> Entities)
+         * @param {GraphsHierarchyGlobalPostRequest} [graphsHierarchyGlobalPostRequest] 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        graphsHierarchyGlobalPost: async (graphsHierarchyGlobalPostRequest?: GraphsHierarchyGlobalPostRequest, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            const localVarPath = `/graphs/hierarchy/global`;
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'POST', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication BearerAuth required
+            // http bearer authentication required
+            await setBearerAuthToObject(localVarHeaderParameter, configuration)
+
+
+    
+            localVarHeaderParameter['Content-Type'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+            localVarRequestOptions.data = serializeDataIfNeeded(graphsHierarchyGlobalPostRequest, localVarRequestOptions, configuration)
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * Search for entities across all user\'s collections using semantic search. This endpoint enables federated graph search across multiple knowledge graphs.  The search will: 1. Use embedding-based similarity search across all workspaces 2. Find entities matching the query across all collections 3. Return relationships between the matched entities 4. Generate federation links (SAME_AS) for identical entities across different collections 
+         * @summary Search entities across all collections (Global Graph)
+         * @param {GraphsSearchGlobalPostRequest} graphsSearchGlobalPostRequest 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        graphsSearchGlobalPost: async (graphsSearchGlobalPostRequest: GraphsSearchGlobalPostRequest, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'graphsSearchGlobalPostRequest' is not null or undefined
+            assertParamExists('graphsSearchGlobalPost', 'graphsSearchGlobalPostRequest', graphsSearchGlobalPostRequest)
+            const localVarPath = `/graphs/search/global`;
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'POST', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication BearerAuth required
+            // http bearer authentication required
+            await setBearerAuthToObject(localVarHeaderParameter, configuration)
+
+
+    
+            localVarHeaderParameter['Content-Type'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+            localVarRequestOptions.data = serializeDataIfNeeded(graphsSearchGlobalPostRequest, localVarRequestOptions, configuration)
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
     }
 };
 
@@ -352,6 +438,32 @@ export const GraphApiFp = function(configuration?: Configuration) {
             const localVarOperationServerBasePath = operationServerMap['GraphApi.collectionsCollectionIdGraphsNodesMergePost']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
+        /**
+         * Get hierarchical graph data showing the relationships between Collections, Documents, and Entities. This provides a top-down view of the entire knowledge graph structure.  The hierarchy structure: - Collection nodes: Root level, representing each knowledge base - Document nodes: Child of collections, representing source documents - Entity nodes: Extracted from documents, representing knowledge graph entities  Edges show: - CONTAINS: Collection -> Document - EXTRACTED_FROM: Document -> Entity  This is useful for: - Understanding data provenance - Navigating from collections to specific entities - Visualizing the overall structure of the knowledge base 
+         * @summary Get hierarchical global graph (Collections -> Documents -> Entities)
+         * @param {GraphsHierarchyGlobalPostRequest} [graphsHierarchyGlobalPostRequest] 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async graphsHierarchyGlobalPost(graphsHierarchyGlobalPostRequest?: GraphsHierarchyGlobalPostRequest, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<GraphsHierarchyGlobalPost200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.graphsHierarchyGlobalPost(graphsHierarchyGlobalPostRequest, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['GraphApi.graphsHierarchyGlobalPost']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * Search for entities across all user\'s collections using semantic search. This endpoint enables federated graph search across multiple knowledge graphs.  The search will: 1. Use embedding-based similarity search across all workspaces 2. Find entities matching the query across all collections 3. Return relationships between the matched entities 4. Generate federation links (SAME_AS) for identical entities across different collections 
+         * @summary Search entities across all collections (Global Graph)
+         * @param {GraphsSearchGlobalPostRequest} graphsSearchGlobalPostRequest 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async graphsSearchGlobalPost(graphsSearchGlobalPostRequest: GraphsSearchGlobalPostRequest, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<GraphsSearchGlobalPost200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.graphsSearchGlobalPost(graphsSearchGlobalPostRequest, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['GraphApi.graphsSearchGlobalPost']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
     }
 };
 
@@ -412,6 +524,26 @@ export const GraphApiFactory = function (configuration?: Configuration, basePath
         collectionsCollectionIdGraphsNodesMergePost(requestParameters: GraphApiCollectionsCollectionIdGraphsNodesMergePostRequest, options?: RawAxiosRequestConfig): AxiosPromise<NodeMergeResponse> {
             return localVarFp.collectionsCollectionIdGraphsNodesMergePost(requestParameters.collectionId, requestParameters.nodeMergeRequest, options).then((request) => request(axios, basePath));
         },
+        /**
+         * Get hierarchical graph data showing the relationships between Collections, Documents, and Entities. This provides a top-down view of the entire knowledge graph structure.  The hierarchy structure: - Collection nodes: Root level, representing each knowledge base - Document nodes: Child of collections, representing source documents - Entity nodes: Extracted from documents, representing knowledge graph entities  Edges show: - CONTAINS: Collection -> Document - EXTRACTED_FROM: Document -> Entity  This is useful for: - Understanding data provenance - Navigating from collections to specific entities - Visualizing the overall structure of the knowledge base 
+         * @summary Get hierarchical global graph (Collections -> Documents -> Entities)
+         * @param {GraphApiGraphsHierarchyGlobalPostRequest} requestParameters Request parameters.
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        graphsHierarchyGlobalPost(requestParameters: GraphApiGraphsHierarchyGlobalPostRequest = {}, options?: RawAxiosRequestConfig): AxiosPromise<GraphsHierarchyGlobalPost200Response> {
+            return localVarFp.graphsHierarchyGlobalPost(requestParameters.graphsHierarchyGlobalPostRequest, options).then((request) => request(axios, basePath));
+        },
+        /**
+         * Search for entities across all user\'s collections using semantic search. This endpoint enables federated graph search across multiple knowledge graphs.  The search will: 1. Use embedding-based similarity search across all workspaces 2. Find entities matching the query across all collections 3. Return relationships between the matched entities 4. Generate federation links (SAME_AS) for identical entities across different collections 
+         * @summary Search entities across all collections (Global Graph)
+         * @param {GraphApiGraphsSearchGlobalPostRequest} requestParameters Request parameters.
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        graphsSearchGlobalPost(requestParameters: GraphApiGraphsSearchGlobalPostRequest, options?: RawAxiosRequestConfig): AxiosPromise<GraphsSearchGlobalPost200Response> {
+            return localVarFp.graphsSearchGlobalPost(requestParameters.graphsSearchGlobalPostRequest, options).then((request) => request(axios, basePath));
+        },
     };
 };
 
@@ -470,6 +602,26 @@ export interface GraphApiInterface {
      * @memberof GraphApiInterface
      */
     collectionsCollectionIdGraphsNodesMergePost(requestParameters: GraphApiCollectionsCollectionIdGraphsNodesMergePostRequest, options?: RawAxiosRequestConfig): AxiosPromise<NodeMergeResponse>;
+
+    /**
+     * Get hierarchical graph data showing the relationships between Collections, Documents, and Entities. This provides a top-down view of the entire knowledge graph structure.  The hierarchy structure: - Collection nodes: Root level, representing each knowledge base - Document nodes: Child of collections, representing source documents - Entity nodes: Extracted from documents, representing knowledge graph entities  Edges show: - CONTAINS: Collection -> Document - EXTRACTED_FROM: Document -> Entity  This is useful for: - Understanding data provenance - Navigating from collections to specific entities - Visualizing the overall structure of the knowledge base 
+     * @summary Get hierarchical global graph (Collections -> Documents -> Entities)
+     * @param {GraphApiGraphsHierarchyGlobalPostRequest} requestParameters Request parameters.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof GraphApiInterface
+     */
+    graphsHierarchyGlobalPost(requestParameters?: GraphApiGraphsHierarchyGlobalPostRequest, options?: RawAxiosRequestConfig): AxiosPromise<GraphsHierarchyGlobalPost200Response>;
+
+    /**
+     * Search for entities across all user\'s collections using semantic search. This endpoint enables federated graph search across multiple knowledge graphs.  The search will: 1. Use embedding-based similarity search across all workspaces 2. Find entities matching the query across all collections 3. Return relationships between the matched entities 4. Generate federation links (SAME_AS) for identical entities across different collections 
+     * @summary Search entities across all collections (Global Graph)
+     * @param {GraphApiGraphsSearchGlobalPostRequest} requestParameters Request parameters.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof GraphApiInterface
+     */
+    graphsSearchGlobalPost(requestParameters: GraphApiGraphsSearchGlobalPostRequest, options?: RawAxiosRequestConfig): AxiosPromise<GraphsSearchGlobalPost200Response>;
 
 }
 
@@ -593,6 +745,34 @@ export interface GraphApiCollectionsCollectionIdGraphsNodesMergePostRequest {
 }
 
 /**
+ * Request parameters for graphsHierarchyGlobalPost operation in GraphApi.
+ * @export
+ * @interface GraphApiGraphsHierarchyGlobalPostRequest
+ */
+export interface GraphApiGraphsHierarchyGlobalPostRequest {
+    /**
+     * 
+     * @type {GraphsHierarchyGlobalPostRequest}
+     * @memberof GraphApiGraphsHierarchyGlobalPost
+     */
+    readonly graphsHierarchyGlobalPostRequest?: GraphsHierarchyGlobalPostRequest
+}
+
+/**
+ * Request parameters for graphsSearchGlobalPost operation in GraphApi.
+ * @export
+ * @interface GraphApiGraphsSearchGlobalPostRequest
+ */
+export interface GraphApiGraphsSearchGlobalPostRequest {
+    /**
+     * 
+     * @type {GraphsSearchGlobalPostRequest}
+     * @memberof GraphApiGraphsSearchGlobalPost
+     */
+    readonly graphsSearchGlobalPostRequest: GraphsSearchGlobalPostRequest
+}
+
+/**
  * GraphApi - object-oriented interface
  * @export
  * @class GraphApi
@@ -657,6 +837,30 @@ export class GraphApi extends BaseAPI implements GraphApiInterface {
      */
     public collectionsCollectionIdGraphsNodesMergePost(requestParameters: GraphApiCollectionsCollectionIdGraphsNodesMergePostRequest, options?: RawAxiosRequestConfig) {
         return GraphApiFp(this.configuration).collectionsCollectionIdGraphsNodesMergePost(requestParameters.collectionId, requestParameters.nodeMergeRequest, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * Get hierarchical graph data showing the relationships between Collections, Documents, and Entities. This provides a top-down view of the entire knowledge graph structure.  The hierarchy structure: - Collection nodes: Root level, representing each knowledge base - Document nodes: Child of collections, representing source documents - Entity nodes: Extracted from documents, representing knowledge graph entities  Edges show: - CONTAINS: Collection -> Document - EXTRACTED_FROM: Document -> Entity  This is useful for: - Understanding data provenance - Navigating from collections to specific entities - Visualizing the overall structure of the knowledge base 
+     * @summary Get hierarchical global graph (Collections -> Documents -> Entities)
+     * @param {GraphApiGraphsHierarchyGlobalPostRequest} requestParameters Request parameters.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof GraphApi
+     */
+    public graphsHierarchyGlobalPost(requestParameters: GraphApiGraphsHierarchyGlobalPostRequest = {}, options?: RawAxiosRequestConfig) {
+        return GraphApiFp(this.configuration).graphsHierarchyGlobalPost(requestParameters.graphsHierarchyGlobalPostRequest, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * Search for entities across all user\'s collections using semantic search. This endpoint enables federated graph search across multiple knowledge graphs.  The search will: 1. Use embedding-based similarity search across all workspaces 2. Find entities matching the query across all collections 3. Return relationships between the matched entities 4. Generate federation links (SAME_AS) for identical entities across different collections 
+     * @summary Search entities across all collections (Global Graph)
+     * @param {GraphApiGraphsSearchGlobalPostRequest} requestParameters Request parameters.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof GraphApi
+     */
+    public graphsSearchGlobalPost(requestParameters: GraphApiGraphsSearchGlobalPostRequest, options?: RawAxiosRequestConfig) {
+        return GraphApiFp(this.configuration).graphsSearchGlobalPost(requestParameters.graphsSearchGlobalPostRequest, options).then((request) => request(this.axios, this.basePath));
     }
 }
 

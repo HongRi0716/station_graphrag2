@@ -174,14 +174,16 @@
     "metadata": {
       "title": "会话"
     },
-    "hello_world": "Hi, I'm ApeRAG.",
-    "rag_description": "ApeRAG是一个结合图检索、向量搜索和全文搜索技术，提供混合检索、知识管理和企业AI应用解决方案。",
+    "hello_world": "Hi, I'm PowerRAG.",
+    "rag_description": "PowerRAG是一个结合图检索、向量搜索和全文搜索技术，提供混合检索、知识管理和智能体应用的电力系统解决方案。",
     "mention_a_collection": "输入@关联相关知识库...",
     "display_empty_title": "新会话",
     "no_collection_was_found": "未找到相关知识库",
     "web_search": "网络检索",
     "web_search_is_enabled": "网络检索已启用",
     "web_search_is_disabled": "网络检索已禁用",
+    "global_knowledge_base": "全局知识库",
+    "global_knowledge_base_desc": "搜索所有知识库",
     "references": "参考文献",
     "feedback": {
       "title": "反馈意见",
@@ -557,6 +559,11 @@
     "agent_scribe": "巡检记录文书",
     "agent_diagnostician": "故障诊断师",
     "agent_prophet": "设备状态预测",
-    "agent_guardian": "电网安全卫士"
+    "agent_guardian": "电网安全卫士",
+    "agent_auditor": "合规审计师",
+    "agent_operation_ticket": "操作票专家",
+    "agent_work_permit": "工作票专家",
+    "agent_accident_deduction": "事故预想专家",
+    "agent_power_guarantee": "电网保电专家"
   }
 }

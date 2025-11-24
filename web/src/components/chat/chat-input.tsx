@@ -66,12 +66,12 @@ export type Attachment = {
   id: string;
   file: File;
   progress_status:
-    | 'pending'
-    | 'uploading'
-    | 'uploaded'
-    | 'indexing'
-    | 'success'
-    | 'failed';
+  | 'pending'
+  | 'uploading'
+  | 'uploaded'
+  | 'indexing'
+  | 'success'
+  | 'failed';
 
   document_id?: string;
   filename?: string;
@@ -269,8 +269,8 @@ export const ChatInput = ({
       collections: isGlobalSearch
         ? [] // Empty array triggers global search
         : collections.filter((c) =>
-            selectedCollections.some((title) => c.title === title),
-          ),
+          selectedCollections.some((title) => c.title === title),
+        ),
       completion: {
         model: modelName,
         model_service_provider: provider?.name || '',
@@ -473,10 +473,12 @@ export const ChatInput = ({
                   <div className="flex items-center gap-2">
                     <Globe className="text-primary h-4 w-4" />
                     <span className="text-sm font-medium">
+                      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                       {page_chat('global_knowledge_base' as any)}
                     </span>
                   </div>
                   <span className="text-muted-foreground text-xs">
+                    {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                     {page_chat('global_knowledge_base_desc' as any)}
                   </span>
                 </MentionItem>

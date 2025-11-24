@@ -158,7 +158,7 @@ export function SignInForm({
               <div className="text-center text-sm">
                 {page_auth('do_not_have_an_account')}
                 <Link
-                  href={`/auth/signup?callbaclUrl=${encodeURIComponent(redirectTo)}`}
+                  href={`/auth/signup?callbackUrl=${encodeURIComponent(redirectTo)}`}
                   className="underline underline-offset-4"
                 >
                   {page_auth('signup')}

@@ -3,16 +3,16 @@
 import { PageContainer, PageHeader, PageContent } from "@/components/page-container";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { PenTool, Search, Layers, Zap, MessageSquare } from "lucide-react";
+import { FileSearch, Search, Layers, Zap, MessageSquare } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { useTranslations } from "next-intl";
 
-export default function ScribeWorkspacePage() {
+export default function WorkPermitWorkspacePage() {
   const t = useTranslations("sidebar_workspace"); 
 
   const handleStartTask = () => {
-    alert("任务已提交给 The Scribe (调用 Agent API)"); 
+    alert("任务已提交给 Work Permit Agent (调用 Agent API)"); 
   };
 
   return (
@@ -20,20 +20,20 @@ export default function ScribeWorkspacePage() {
       <PageHeader 
         breadcrumbs={[
           { title: t('agents'), href: '/workspace/agents' },
-          { title: "文书专员 工作台" }
+          { title: "工作票专家 工作台" }
         ]}
       />
       <PageContent>
         <div className="space-y-6">
           {/* Header Section */}
           <div className="flex items-center space-x-4 mb-8">
-              <div className="p-3 rounded-full bg-cyan-500/10">
-                  <PenTool className="w-8 h-8 text-cyan-500" />
+              <div className="p-3 rounded-full bg-violet-500/10">
+                  <FileSearch className="w-8 h-8 text-violet-500" />
               </div>
               <div>
-                  <h1 className="text-3xl font-bold tracking-tight">文书专员 工作台</h1>
+                  <h1 className="text-3xl font-bold tracking-tight">工作票专家 工作台</h1>
                   <p className="text-muted-foreground mt-1">
-                    自动化填报助手。将语音或非结构化文本转化为标准巡视记录单。
+                    工作票合规性审查与安全措施验证。确保作业安全。
                   </p>
               </div>
           </div>
@@ -43,7 +43,7 @@ export default function ScribeWorkspacePage() {
             <Card className="lg:col-span-2">
               <CardHeader>
                 <CardTitle className="flex items-center space-x-2 text-lg">
-                  <Zap className="w-5 h-5 text-cyan-500" />
+                  <Zap className="w-5 h-5 text-violet-500" />
                   <span>核心能力 (Core Capabilities)</span>
                 </CardTitle>
                 <CardDescription>选择一项能力开始任务，或直接在下方输入指令。</CardDescription>
@@ -52,23 +52,23 @@ export default function ScribeWorkspacePage() {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   
                   <div className="p-4 border rounded-lg hover:bg-muted/50 cursor-pointer transition-colors">
-                    <h4 className="font-medium text-sm mb-1">语音转录 (Voice Transcription)</h4>
-                    <p className="text-xs text-muted-foreground">将巡检语音记录转录为文字。</p>
+                    <h4 className="font-medium text-sm mb-1">票面审查 (Permit Review)</h4>
+                    <p className="text-xs text-muted-foreground">审查工作票内容的完整性和规范性。</p>
                   </div>
                   <div className="p-4 border rounded-lg hover:bg-muted/50 cursor-pointer transition-colors">
-                    <h4 className="font-medium text-sm mb-1">表单填充 (Form Filling)</h4>
-                    <p className="text-xs text-muted-foreground">自动提取信息并填充到标准表格中。</p>
+                    <h4 className="font-medium text-sm mb-1">安措验证 (Safety Validation)</h4>
+                    <p className="text-xs text-muted-foreground">验证安全措施是否满足作业要求。</p>
                   </div>
                   <div className="p-4 border rounded-lg hover:bg-muted/50 cursor-pointer transition-colors">
-                    <h4 className="font-medium text-sm mb-1">文档生成 (Document Generation)</h4>
-                    <p className="text-xs text-muted-foreground">生成巡检日报、周报等文档。</p>
+                    <h4 className="font-medium text-sm mb-1">许可建议 (Permit Advice)</h4>
+                    <p className="text-xs text-muted-foreground">提供工作许可签发建议。</p>
                   </div>
                 </div>
                 <Separator />
                 <div className="space-y-2">
                     <h3 className="text-sm font-medium">任务指令</h3>
                     <Textarea 
-                        placeholder="例如：根据这段语音记录，生成今天的巡检日志。"
+                        placeholder="例如：审查这张检修工作票的安全措施是否完善。"
                         rows={4}
                     />
                 </div>
@@ -113,3 +113,4 @@ export default function ScribeWorkspacePage() {
     </PageContainer>
   );
 }
+

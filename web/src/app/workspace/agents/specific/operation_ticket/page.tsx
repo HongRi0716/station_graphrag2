@@ -15,14 +15,20 @@ import {
 } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
-import { Layers, MessageSquare, Search, Zap } from 'lucide-react';
+import {
+  ClipboardCheck,
+  Layers,
+  MessageSquare,
+  Search,
+  Zap,
+} from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
-export default function SupervisorWorkspacePage() {
+export default function OperationTicketWorkspacePage() {
   const t = useTranslations('sidebar_workspace');
 
   const handleStartTask = () => {
-    alert('任务已提交给 The Supervisor (调用 Agent API)');
+    alert('任务已提交给 Operation Ticket Agent (调用 Agent API)');
   };
 
   return (
@@ -30,22 +36,22 @@ export default function SupervisorWorkspacePage() {
       <PageHeader
         breadcrumbs={[
           { title: t('agents'), href: '/workspace/agents' },
-          { title: '总控大脑 工作台' },
+          { title: '操作票专家 工作台' },
         ]}
       />
       <PageContent>
         <div className="space-y-6">
           {/* Header Section */}
           <div className="mb-8 flex items-center space-x-4">
-            <div className="rounded-full bg-yellow-500/10 p-3">
-              <Zap className="h-8 w-8 text-yellow-500" />
+            <div className="rounded-full bg-teal-500/10 p-3">
+              <ClipboardCheck className="h-8 w-8 text-teal-500" />
             </div>
             <div>
               <h1 className="text-3xl font-bold tracking-tight">
-                总控大脑 工作台
+                操作票专家 工作台
               </h1>
               <p className="text-muted-foreground mt-1">
-                变电站总控大脑。负责意图识别、任务拆解、指挥其他专家协同工作。
+                操作票生成与逻辑校验。确保倒闸操作流程安全无误。
               </p>
             </div>
           </div>
@@ -55,7 +61,7 @@ export default function SupervisorWorkspacePage() {
             <Card className="lg:col-span-2">
               <CardHeader>
                 <CardTitle className="flex items-center space-x-2 text-lg">
-                  <Zap className="h-5 w-5 text-yellow-500" />
+                  <Zap className="h-5 w-5 text-teal-500" />
                   <span>核心能力 (Core Capabilities)</span>
                 </CardTitle>
                 <CardDescription>
@@ -66,26 +72,26 @@ export default function SupervisorWorkspacePage() {
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                   <div className="hover:bg-muted/50 cursor-pointer rounded-lg border p-4 transition-colors">
                     <h4 className="mb-1 text-sm font-medium">
-                      任务编排 (Task Orchestration)
+                      操作票生成 (Ticket Generation)
                     </h4>
                     <p className="text-muted-foreground text-xs">
-                      将复杂的运维任务拆解为子任务，并分发给相应的专家智能体。
+                      根据操作任务自动生成标准操作票。
                     </p>
                   </div>
                   <div className="hover:bg-muted/50 cursor-pointer rounded-lg border p-4 transition-colors">
                     <h4 className="mb-1 text-sm font-medium">
-                      综合研判 (Comprehensive Analysis)
+                      逻辑校验 (Logic Verification)
                     </h4>
                     <p className="text-muted-foreground text-xs">
-                      汇总各方信息，提供全局视角的决策建议。
+                      检查操作票是否存在五防逻辑错误。
                     </p>
                   </div>
                   <div className="hover:bg-muted/50 cursor-pointer rounded-lg border p-4 transition-colors">
                     <h4 className="mb-1 text-sm font-medium">
-                      SOP生成 (SOP Generation)
+                      风险预警 (Risk Alert)
                     </h4>
                     <p className="text-muted-foreground text-xs">
-                      根据当前场景自动生成标准作业程序 (SOP)。
+                      识别操作过程中可能存在的安全风险。
                     </p>
                   </div>
                 </div>
@@ -93,7 +99,7 @@ export default function SupervisorWorkspacePage() {
                 <div className="space-y-2">
                   <h3 className="text-sm font-medium">任务指令</h3>
                   <Textarea
-                    placeholder="例如：请制定一份针对主变压器油温过高的应急处理方案，并指挥相关人员进行检查。"
+                    placeholder="例如：生成一张将 #1主变 由运行转冷备用的操作票。"
                     rows={4}
                   />
                 </div>

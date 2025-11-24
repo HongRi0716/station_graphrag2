@@ -56,12 +56,5 @@ export interface CollectionCreate {
      * @memberof CollectionCreate
      */
     'source'?: CollectionSource;
-    /**
-     * IDs of collections to copy documents from when creating this collection. Documents with duplicate names will be automatically deduplicated.
-     * @type {Array<string>}
-     * @memberof CollectionCreate
-     * @example ["col_id_1", "col_id_2"]
-     */
-    'source_collection_ids'?: Array<string>;
 }
 

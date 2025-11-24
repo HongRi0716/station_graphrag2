@@ -1754,6 +1754,199 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/failResponse'
+  /graphs/search/global:
+    post:
+      summary: Search entities across all collections (Global Graph)
+      description: |
+        Search for entities across all user's collections using semantic search.
+        This endpoint enables federated graph search across multiple knowledge graphs.
+
+        The search will:
+        1. Use embedding-based similarity search across all workspaces
+        2. Find entities matching the query across all collections
+        3. Return relationships between the matched entities
+        4. Generate federation links (SAME_AS) for identical entities across different collections
+      tags:
+        - graph
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                query:
+                  type: string
+                  description: Search query for finding entities
+                  example: transformer
+                top_k:
+                  type: integer
+                  description: Maximum number of entities to return
+                  default: 100
+                  minimum: 1
+                  maximum: 1000
+              required:
+                - query
+      responses:
+        '200':
+          description: Global graph search results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  entities:
+                    type: array
+                    description: List of matched entities across all collections
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        entity_name:
+                          type: string
+                        workspace:
+                          type: string
+                          description: Collection ID where this entity belongs
+                        content:
+                          type: string
+                        distance:
+                          type: number
+                          description: Similarity score
+                  nodes:
+                    type: array
+                    description: Graph nodes for visualization
+                    items:
+                      type: object
+                  edges:
+                    type: array
+                    description: Graph edges including federation links
+                    items:
+                      type: object
+        '400':
+          description: Bad request - invalid parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/failResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/failResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/failResponse'
+  /graphs/hierarchy/global:
+    post:
+      summary: Get hierarchical global graph (Collections -> Documents -> Entities)
+      description: |
+        Get hierarchical graph data showing the relationships between Collections, Documents, and Entities.
+        This provides a top-down view of the entire knowledge graph structure.
+
+        The hierarchy structure:
+        - Collection nodes: Root level, representing each knowledge base
+        - Document nodes: Child of collections, representing source documents
+        - Entity nodes: Extracted from documents, representing knowledge graph entities
+
+        Edges show:
+        - CONTAINS: Collection -> Document
+        - EXTRACTED_FROM: Document -> Entity
+
+        This is useful for:
+        - Understanding data provenance
+        - Navigating from collections to specific entities
+        - Visualizing the overall structure of the knowledge base
+      tags:
+        - graph
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                query:
+                  type: string
+                  description: Optional query to filter entities (currently unused, reserved for future)
+                  default: ''
+                top_k:
+                  type: integer
+                  description: Maximum number of entities to include
+                  default: 100
+                  minimum: 1
+                  maximum: 1000
+      responses:
+        '200':
+          description: Hierarchical graph data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  nodes:
+                    type: array
+                    description: List of nodes (collections, documents, entities)
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          description: Unique node ID (e.g., col_{id}, doc_{id}, ent_{workspace}_{id})
+                        type:
+                          type: string
+                          enum:
+                            - collection
+                            - document
+                            - entity
+                        name:
+                          type: string
+                        metadata:
+                          type: object
+                          description: Additional metadata specific to node type
+                  edges:
+                    type: array
+                    description: List of edges showing hierarchical relationships
+                    items:
+                      type: object
+                      properties:
+                        source:
+                          type: string
+                        target:
+                          type: string
+                        type:
+                          type: string
+                          enum:
+                            - CONTAINS
+                            - EXTRACTED_FROM
+                        label:
+                          type: string
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/failResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/failResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/failResponse'
   /collections/{collection_id}/sharing:
     get:
       summary: Get collection sharing status

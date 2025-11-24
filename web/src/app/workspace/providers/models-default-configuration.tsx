@@ -91,6 +91,7 @@ export const ModelsDefaultConfiguration = () => {
       );
       if (!hasVisionScenario) {
         defaultModelsList.push({
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           scenario: 'default_for_vision' as any, // Type assertion for frontend-only scenario
           provider_name: undefined,
           model: undefined,
@@ -154,7 +155,7 @@ export const ModelsDefaultConfiguration = () => {
     } finally {
       setLoading(false);
     }
-  }, [common_tips]);
+  }, []); // common_tips is not used in this callback
 
   const handleScenarioChange = useCallback(
     (

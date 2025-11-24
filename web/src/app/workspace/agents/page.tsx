@@ -2,11 +2,14 @@
 
 import {
   Activity,
+  AlertTriangle,
   Bot,
   Calculator as CalculatorIcon,
+  ClipboardCheck,
   ClipboardList,
   Eye,
   FileSearch,
+  FileText,
   GraduationCap,
   Library,
   PenTool,
@@ -40,7 +43,11 @@ const SPECIAL_AGENT_ROUTES: Record<string, string> = {
   prophet: '/workspace/agents/specific/prophet',
   scribe: '/workspace/agents/specific/scribe',
   instructor: '/workspace/agents/specific/instructor',
-  guardian: '/workspace/agents/specific/guardian',
+  auditor: '/workspace/agents/specific/auditor',
+  operation_ticket: '/workspace/agents/specific/operation_ticket',
+  work_permit: '/workspace/agents/specific/work_permit',
+  accident_deduction: '/workspace/agents/specific/accident_deduction',
+  power_guarantee: '/workspace/agents/specific/power_guarantee',
 };
 
 const SPECIALIST_AGENTS = [
@@ -146,14 +153,44 @@ const SPECIALIST_AGENTS = [
     capabilities: ['视觉问答', '拓扑分析', '图纸比对'],
   },
   {
-    id: 'guardian',
-    title: 'The Guardian (电网安全卫士)',
+    id: 'operation_ticket',
+    title: 'The Operation Ticket Agent (操作票专家)',
     description:
-      '电网安全守护者。负责保电方案制定、应急预案生成、安全风险评估。',
+      '操作票智能编制与审核。自动生成倒闸操作票，审核步骤合规性，优化操作顺序。',
+    icon: ClipboardCheck,
+    color: 'text-teal-500',
+    bg: 'bg-teal-500/10',
+    capabilities: ['操作票生成', '合规性审核', '步骤优化'],
+  },
+  {
+    id: 'work_permit',
+    title: 'The Work Permit Agent (工作票专家)',
+    description:
+      '工作票智能编制与审核。自动识别危险点，生成安全措施，确保作业安全。',
+    icon: FileText,
+    color: 'text-violet-500',
+    bg: 'bg-violet-500/10',
+    capabilities: ['工作票生成', '危险点识别', '安全措施生成'],
+  },
+  {
+    id: 'accident_deduction',
+    title: 'The Accident Deduction Agent (事故预想专家)',
+    description:
+      '事故预想与应急演练。生成事故预想报告，制定应急预案，指导应急演练。',
+    icon: AlertTriangle,
+    color: 'text-pink-600',
+    bg: 'bg-pink-600/10',
+    capabilities: ['事故预想', '应急预案', '演练设计'],
+  },
+  {
+    id: 'power_guarantee',
+    title: 'The Power Guarantee Agent (保电方案专家)',
+    description:
+      '保电方案编制专家。制定重要活动保电方案，设备巡检计划，应急资源配置。',
     icon: Shield,
     color: 'text-emerald-500',
     bg: 'bg-emerald-500/10',
-    capabilities: ['保电方案', '应急预案', '风险评估'],
+    capabilities: ['保电方案', '巡检计划', '资源配置'],
   },
 ];
 

@@ -28,6 +28,16 @@ request.interceptors.response.use(
   },
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function (err: any) {
+    if (err.response?.status === 401) {
+      if (typeof window !== 'undefined') {
+        if (!window.location.pathname.includes('/auth/signin')) {
+          window.location.href = `/auth/signin?callbackUrl=${encodeURIComponent(
+            window.location.pathname,
+          )}`;
+        }
+      }
+    }
+
     let bizMessage: string | undefined;
 
     if (typeof err.response?.data?.detail === 'string') {

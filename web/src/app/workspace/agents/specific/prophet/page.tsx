@@ -1,134 +1,115 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-
-import {
-    PageContainer,
-    PageContent,
-    PageHeader,
-} from '@/components/page-container';
-import { Button } from '@/components/ui/button';
-import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardFooter,
-    CardHeader,
-    CardTitle,
-} from '@/components/ui/card';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { BrainCircuit, FileWarning, Sparkles } from 'lucide-react';
-import { useTranslations } from 'next-intl';
+import { PageContainer, PageHeader, PageContent } from "@/components/page-container";
+import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { TrendingUp, Search, Layers, Zap, MessageSquare } from "lucide-react";
+import { Separator } from "@/components/ui/separator";
+import { Textarea } from "@/components/ui/textarea";
+import { useTranslations } from "next-intl";
 
 export default function ProphetWorkspacePage() {
-    const t = useTranslations('sidebar_workspace');
-    const [inputContent, setInputContent] = useState('');
-    const [generatedReport, setGeneratedReport] = useState<string | null>(null);
+  const t = useTranslations("sidebar_workspace"); 
 
-    const handleGenerate = () => {
-        if (!inputContent.trim()) return;
+  const handleStartTask = () => {
+    alert("任务已提交给 The Prophet (调用 Agent API)"); 
+  };
 
-        // Mock generation logic
-        const report = `【事故预想报告】
-场景描述：${inputContent}
-风险等级：高
-可能后果：
-1. 导致主变过载跳闸。
-2. 造成下游用户停电。
-应对措施：
-1. 密切监视负荷变化。
-2. 检查备用电源自投装置状态。
-3. 做好负荷转供准备。`;
-        setGeneratedReport(report);
-    };
+  return (
+    <PageContainer>
+      <PageHeader 
+        breadcrumbs={[
+          { title: t('agents'), href: '/workspace/agents' },
+          { title: "趋势预言家 工作台" }
+        ]}
+      />
+      <PageContent>
+        <div className="space-y-6">
+          {/* Header Section */}
+          <div className="flex items-center space-x-4 mb-8">
+              <div className="p-3 rounded-full bg-green-500/10">
+                  <TrendingUp className="w-8 h-8 text-green-500" />
+              </div>
+              <div>
+                  <h1 className="text-3xl font-bold tracking-tight">趋势预言家 工作台</h1>
+                  <p className="text-muted-foreground mt-1">
+                    时序数据分析师。接入在线监测数据，预测潜在故障趋势。
+                  </p>
+              </div>
+          </div>
 
-    return (
-        <PageContainer>
-            <PageHeader
-                breadcrumbs={[
-                    { title: t('agents'), href: '/workspace/agents' },
-                    { title: '预言家 (Prophet) 工作台' },
-                ]}
-            />
-            <PageContent>
-                <div className="space-y-6">
-                    <div className="flex items-center space-x-4">
-                        <div className="rounded-full bg-indigo-500/10 p-3">
-                            <BrainCircuit className="h-8 w-8 text-indigo-500" />
-                        </div>
-                        <div>
-                            <h1 className="text-3xl font-bold tracking-tight">
-                                预言家 (Prophet) 工作台
-                            </h1>
-                            <p className="text-muted-foreground mt-1">
-                                基于当前运行方式和设备状态，生成事故预想报告和风险分析。
-                            </p>
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="flex items-center space-x-2 text-lg">
-                                    <FileWarning className="h-5 w-5" />
-                                    <span>运行场景输入</span>
-                                </CardTitle>
-                                <CardDescription>
-                                    描述当前的电网运行方式、检修计划或异常信号。
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent className="space-y-4">
-                                <div className="space-y-2">
-                                    <Label htmlFor="input">场景描述</Label>
-                                    <Textarea
-                                        id="input"
-                                        placeholder="例如：2号主变计划检修，1号主变带全站负荷运行..."
-                                        className="min-h-[200px]"
-                                        value={inputContent}
-                                        onChange={(e) => setInputContent(e.target.value)}
-                                    />
-                                </div>
-                            </CardContent>
-                            <CardFooter>
-                                <Button
-                                    className="w-full bg-indigo-600 hover:bg-indigo-700"
-                                    onClick={handleGenerate}
-                                    disabled={!inputContent.trim()}
-                                >
-                                    <Sparkles className="mr-2 h-4 w-4" />
-                                    生成预想报告
-                                </Button>
-                            </CardFooter>
-                        </Card>
-
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="flex items-center space-x-2 text-lg">
-                                    <BrainCircuit className="h-5 w-5" />
-                                    <span>分析结果</span>
-                                </CardTitle>
-                                <CardDescription>
-                                    AI 生成的事故预想与风险管控措施。
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                {!generatedReport ? (
-                                    <div className="flex h-[200px] items-center justify-center rounded-md border border-dashed bg-muted/30">
-                                        <p className="text-muted-foreground text-sm">
-                                            等待分析...
-                                        </p>
-                                    </div>
-                                ) : (
-                                    <div className="rounded-md border bg-muted/30 p-4 font-mono text-sm whitespace-pre-wrap">
-                                        {generatedReport}
-                                    </div>
-                                )}
-                            </CardContent>
-                        </Card>
-                    </div>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Main Task Area */}
+            <Card className="lg:col-span-2">
+              <CardHeader>
+                <CardTitle className="flex items-center space-x-2 text-lg">
+                  <Zap className="w-5 h-5 text-green-500" />
+                  <span>核心能力 (Core Capabilities)</span>
+                </CardTitle>
+                <CardDescription>选择一项能力开始任务，或直接在下方输入指令。</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  
+                  <div className="p-4 border rounded-lg hover:bg-muted/50 cursor-pointer transition-colors">
+                    <h4 className="font-medium text-sm mb-1">趋势预测 (Trend Prediction)</h4>
+                    <p className="text-xs text-muted-foreground">基于历史数据预测设备状态发展趋势。</p>
+                  </div>
+                  <div className="p-4 border rounded-lg hover:bg-muted/50 cursor-pointer transition-colors">
+                    <h4 className="font-medium text-sm mb-1">异常检测 (Anomaly Detection)</h4>
+                    <p className="text-xs text-muted-foreground">识别数据中的异常模式，提前预警。</p>
+                  </div>
+                  <div className="p-4 border rounded-lg hover:bg-muted/50 cursor-pointer transition-colors">
+                    <h4 className="font-medium text-sm mb-1">数值分析 (Numerical Analysis)</h4>
+                    <p className="text-xs text-muted-foreground">对监测数据进行深度统计分析。</p>
+                  </div>
                 </div>
-            </PageContent>
-        </PageContainer>
-    );
+                <Separator />
+                <div className="space-y-2">
+                    <h3 className="text-sm font-medium">任务指令</h3>
+                    <Textarea 
+                        placeholder="例如：预测 1 号主变油中溶解气体含量的未来一周趋势。"
+                        rows={4}
+                    />
+                </div>
+                <Button 
+                    onClick={handleStartTask} 
+                    className="w-full"
+                >
+                    <MessageSquare className="w-4 h-4 mr-2" />
+                    发送指令
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* Side Panel: Quick Tools / Context */}
+            <Card className="lg:col-span-1">
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center space-x-2">
+                  <Layers className="w-5 h-5 text-primary" />
+                  <span>快捷工具</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <h3 className="text-sm font-medium">上下文检索</h3>
+                  <Button variant="outline" className="w-full justify-start">
+                    <Search className="w-4 h-4 mr-2" />
+                    搜索相关文档
+                  </Button>
+                </div>
+                <Separator />
+                <div className="space-y-2">
+                  <h3 className="text-sm font-medium">历史记录</h3>
+                  <div className="text-sm text-muted-foreground text-center py-4">
+                    暂无最近任务记录
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </PageContent>
+    </PageContainer>
+  );
 }

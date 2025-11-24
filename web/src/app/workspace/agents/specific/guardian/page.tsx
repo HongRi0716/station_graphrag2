@@ -1,136 +1,115 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-
-import {
-    PageContainer,
-    PageContent,
-    PageHeader,
-} from '@/components/page-container';
-import { Button } from '@/components/ui/button';
-import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardFooter,
-    CardHeader,
-    CardTitle,
-} from '@/components/ui/card';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Shield, ShieldAlert, ShieldCheck } from 'lucide-react';
-import { useTranslations } from 'next-intl';
+import { PageContainer, PageHeader, PageContent } from "@/components/page-container";
+import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Shield, Search, Layers, Zap, MessageSquare } from "lucide-react";
+import { Separator } from "@/components/ui/separator";
+import { Textarea } from "@/components/ui/textarea";
+import { useTranslations } from "next-intl";
 
 export default function GuardianWorkspacePage() {
-    const t = useTranslations('sidebar_workspace');
-    const [inputContent, setInputContent] = useState('');
-    const [generatedPlan, setGeneratedPlan] = useState<string | null>(null);
+  const t = useTranslations("sidebar_workspace"); 
 
-    const handleGenerate = () => {
-        if (!inputContent.trim()) return;
+  const handleStartTask = () => {
+    alert("任务已提交给 The Guardian (调用 Agent API)"); 
+  };
 
-        // Mock generation logic
-        const plan = `【保电方案】
-任务名称：${inputContent}
-保电等级：一级
-组织措施：
-1. 成立保电领导小组，由站长任组长。
-2. 安排双人24小时值班。
-技术措施：
-1. 提前对全站设备进行红外测温。
-2. 检查事故照明及消防设施完好。
-3. 停止一切非紧急检修工作。
-应急预案：
-如遇主变跳闸，立即启用备用变压器，优先保障重要负荷供电。`;
-        setGeneratedPlan(plan);
-    };
+  return (
+    <PageContainer>
+      <PageHeader 
+        breadcrumbs={[
+          { title: t('agents'), href: '/workspace/agents' },
+          { title: "电网安全卫士 工作台" }
+        ]}
+      />
+      <PageContent>
+        <div className="space-y-6">
+          {/* Header Section */}
+          <div className="flex items-center space-x-4 mb-8">
+              <div className="p-3 rounded-full bg-emerald-500/10">
+                  <Shield className="w-8 h-8 text-emerald-500" />
+              </div>
+              <div>
+                  <h1 className="text-3xl font-bold tracking-tight">电网安全卫士 工作台</h1>
+                  <p className="text-muted-foreground mt-1">
+                    电网安全守护者。负责保电方案制定、应急预案生成、安全风险评估。
+                  </p>
+              </div>
+          </div>
 
-    return (
-        <PageContainer>
-            <PageHeader
-                breadcrumbs={[
-                    { title: t('agents'), href: '/workspace/agents' },
-                    { title: '守护者 (Guardian) 工作台' },
-                ]}
-            />
-            <PageContent>
-                <div className="space-y-6">
-                    <div className="flex items-center space-x-4">
-                        <div className="rounded-full bg-emerald-500/10 p-3">
-                            <Shield className="h-8 w-8 text-emerald-500" />
-                        </div>
-                        <div>
-                            <h1 className="text-3xl font-bold tracking-tight">
-                                守护者 (Guardian) 工作台
-                            </h1>
-                            <p className="text-muted-foreground mt-1">
-                                针对重大活动或特殊天气，生成专项保电方案和应急预案。
-                            </p>
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="flex items-center space-x-2 text-lg">
-                                    <ShieldAlert className="h-5 w-5" />
-                                    <span>保电任务输入</span>
-                                </CardTitle>
-                                <CardDescription>
-                                    输入保电任务名称、时间、重要程度及特殊要求。
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent className="space-y-4">
-                                <div className="space-y-2">
-                                    <Label htmlFor="input">任务详情</Label>
-                                    <Textarea
-                                        id="input"
-                                        placeholder="例如：2024年国庆节期间保电，重点保障政府机关及医院供电..."
-                                        className="min-h-[200px]"
-                                        value={inputContent}
-                                        onChange={(e) => setInputContent(e.target.value)}
-                                    />
-                                </div>
-                            </CardContent>
-                            <CardFooter>
-                                <Button
-                                    className="w-full bg-emerald-600 hover:bg-emerald-700"
-                                    onClick={handleGenerate}
-                                    disabled={!inputContent.trim()}
-                                >
-                                    <ShieldCheck className="mr-2 h-4 w-4" />
-                                    生成保电方案
-                                </Button>
-                            </CardFooter>
-                        </Card>
-
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="flex items-center space-x-2 text-lg">
-                                    <Shield className="h-5 w-5" />
-                                    <span>生成结果</span>
-                                </CardTitle>
-                                <CardDescription>
-                                    AI 生成的标准化保电方案。
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                {!generatedPlan ? (
-                                    <div className="flex h-[200px] items-center justify-center rounded-md border border-dashed bg-muted/30">
-                                        <p className="text-muted-foreground text-sm">
-                                            等待生成...
-                                        </p>
-                                    </div>
-                                ) : (
-                                    <div className="rounded-md border bg-muted/30 p-4 font-mono text-sm whitespace-pre-wrap">
-                                        {generatedPlan}
-                                    </div>
-                                )}
-                            </CardContent>
-                        </Card>
-                    </div>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Main Task Area */}
+            <Card className="lg:col-span-2">
+              <CardHeader>
+                <CardTitle className="flex items-center space-x-2 text-lg">
+                  <Zap className="w-5 h-5 text-emerald-500" />
+                  <span>核心能力 (Core Capabilities)</span>
+                </CardTitle>
+                <CardDescription>选择一项能力开始任务，或直接在下方输入指令。</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  
+                  <div className="p-4 border rounded-lg hover:bg-muted/50 cursor-pointer transition-colors">
+                    <h4 className="font-medium text-sm mb-1">保电方案 (Power Protection Plan)</h4>
+                    <p className="text-xs text-muted-foreground">制定重要活动的保电方案。</p>
+                  </div>
+                  <div className="p-4 border rounded-lg hover:bg-muted/50 cursor-pointer transition-colors">
+                    <h4 className="font-medium text-sm mb-1">应急预案 (Emergency Plan)</h4>
+                    <p className="text-xs text-muted-foreground">生成针对特定突发事件的应急预案。</p>
+                  </div>
+                  <div className="p-4 border rounded-lg hover:bg-muted/50 cursor-pointer transition-colors">
+                    <h4 className="font-medium text-sm mb-1">风险评估 (Risk Assessment)</h4>
+                    <p className="text-xs text-muted-foreground">评估电网运行的安全风险。</p>
+                  </div>
                 </div>
-            </PageContent>
-        </PageContainer>
-    );
+                <Separator />
+                <div className="space-y-2">
+                    <h3 className="text-sm font-medium">任务指令</h3>
+                    <Textarea 
+                        placeholder="例如：为即将到来的台风天气制定一份防汛抗台应急预案。"
+                        rows={4}
+                    />
+                </div>
+                <Button 
+                    onClick={handleStartTask} 
+                    className="w-full"
+                >
+                    <MessageSquare className="w-4 h-4 mr-2" />
+                    发送指令
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* Side Panel: Quick Tools / Context */}
+            <Card className="lg:col-span-1">
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center space-x-2">
+                  <Layers className="w-5 h-5 text-primary" />
+                  <span>快捷工具</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <h3 className="text-sm font-medium">上下文检索</h3>
+                  <Button variant="outline" className="w-full justify-start">
+                    <Search className="w-4 h-4 mr-2" />
+                    搜索相关文档
+                  </Button>
+                </div>
+                <Separator />
+                <div className="space-y-2">
+                  <h3 className="text-sm font-medium">历史记录</h3>
+                  <div className="text-sm text-muted-foreground text-center py-4">
+                    暂无最近任务记录
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </PageContent>
+    </PageContainer>
+  );
 }

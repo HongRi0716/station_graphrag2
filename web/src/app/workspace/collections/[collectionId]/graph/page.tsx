@@ -10,7 +10,7 @@ import { CollectionGraph } from './collection-graph';
 export default async function Page({
   params,
 }: {
-  params: { collectionId: string };
+  params: Promise<{ collectionId: string }>;
 }) {
   const { collectionId } = await params;
   const isGlobal = collectionId === 'all';

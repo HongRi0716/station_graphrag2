@@ -18,6 +18,7 @@ export const MessagePartsUser = ({ parts }: { parts: ChatMessage[] }) => {
 
     // Replace @__GLOBAL__ with friendly name (handle various formats)
     const globalName =
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       page_chat('global_knowledge_base' as any) || '全局知识库';
     processed = processed.replace(/@__GLOBAL__/g, `@${globalName}`);
     // Also handle if stored without @ prefix (though unlikely)

@@ -1,129 +1,108 @@
-'use client';
+"use client";
 
-import {
-  PageContainer,
-  PageContent,
-  PageHeader,
-} from '@/components/page-container';
-import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
-import { Separator } from '@/components/ui/separator';
-import { Textarea } from '@/components/ui/textarea';
-import { Activity, Code, FileUp, LineChart, Search } from 'lucide-react';
-import { useTranslations } from 'next-intl';
-
-const LogUploadSlot = ({ type }: { type: string }) => (
-  <div className="bg-background/50 hover:bg-muted/30 flex h-32 flex-col items-center justify-center rounded-lg border-2 border-dashed p-4 transition-colors">
-    <FileUp className="text-muted-foreground mb-1 h-6 w-6" />
-    <p className="text-muted-foreground text-sm font-medium">
-      {type} 文件 (.cfg / .dat / .txt)
-    </p>
-    <span className="text-muted-foreground mt-1 text-xs">点击上传或拖拽</span>
-  </div>
-);
-
-const WaveformDisplay = () => (
-  <div className="relative flex h-64 items-center justify-center rounded-lg border border-red-800/40 bg-black/90 p-8">
-    <LineChart className="h-full w-full text-red-500/40" />
-    <span className="absolute font-mono text-sm text-red-400/80">
-      波形图生成区域 (Ia, Ib, Ic, Ua, Ub, Uc)
-    </span>
-  </div>
-);
+import { PageContainer, PageHeader, PageContent } from "@/components/page-container";
+import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Activity, Search, Layers, Zap, MessageSquare } from "lucide-react";
+import { Separator } from "@/components/ui/separator";
+import { Textarea } from "@/components/ui/textarea";
+import { useTranslations } from "next-intl";
 
 export default function DiagnosticianWorkspacePage() {
-  const t = useTranslations('sidebar_workspace');
+  const t = useTranslations("sidebar_workspace"); 
 
-  const handleStartAnalysis = () => {
-    alert('开始事故因果链推理... (调用 Diagnostician Agent API)');
+  const handleStartTask = () => {
+    alert("任务已提交给 The Diagnostician (调用 Agent API)"); 
   };
 
   return (
     <PageContainer>
-      <PageHeader
+      <PageHeader 
         breadcrumbs={[
           { title: t('agents'), href: '/workspace/agents' },
-          { title: `${t('agent_diagnostician')} 工作台` },
+          { title: "故障诊断师 工作台" }
         ]}
       />
       <PageContent>
         <div className="space-y-6">
-          <div className="flex items-center space-x-4">
-            <div className="rounded-full bg-red-600/10 p-3">
-              <Activity className="h-8 w-8 text-red-600" />
-            </div>
-            <div>
-              <h1 className="text-3xl font-bold tracking-tight">
-                {t('agent_diagnostician')} 工作台
-              </h1>
-              <p className="text-muted-foreground mt-1">
-                专用工作区，用于故障录波、SOE (事件顺序记录)
-                分析与事故因果链推演。
-              </p>
-            </div>
+          {/* Header Section */}
+          <div className="flex items-center space-x-4 mb-8">
+              <div className="p-3 rounded-full bg-red-600/10">
+                  <Activity className="w-8 h-8 text-red-600" />
+              </div>
+              <div>
+                  <h1 className="text-3xl font-bold tracking-tight">故障诊断师 工作台</h1>
+                  <p className="text-muted-foreground mt-1">
+                    深度故障分析专家。解析录波文件与SOE日志，推演事故因果链。
+                  </p>
+              </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-            <Card className="flex h-full flex-col lg:col-span-1">
-              <CardHeader>
-                <CardTitle className="flex items-center space-x-2 text-lg">
-                  <FileUp className="h-5 w-5" />
-                  <span>故障数据上传</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="flex-grow space-y-4">
-                <LogUploadSlot type="录波文件 (COMTRADE)" />
-                <LogUploadSlot type="SOE 日志文件" />
-                <Separator />
-                <div className="space-y-2">
-                  <h3 className="text-sm font-medium">分析指令</h3>
-                  <Textarea
-                    placeholder="例如：请判断本次故障是否为区内短路，并估算故障发生距离。"
-                    rows={4}
-                  />
-                </div>
-              </CardContent>
-              <div className="p-6 pt-0">
-                <Button
-                  className="w-full bg-red-600 hover:bg-red-700"
-                  onClick={handleStartAnalysis}
-                >
-                  <Search className="mr-2 h-4 w-4" />
-                  开始故障诊断
-                </Button>
-              </div>
-            </Card>
-
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Main Task Area */}
             <Card className="lg:col-span-2">
               <CardHeader>
                 <CardTitle className="flex items-center space-x-2 text-lg">
-                  <Code className="text-primary h-5 w-5" />
-                  <span>诊断报告与波形分析</span>
+                  <Zap className="w-5 h-5 text-red-600" />
+                  <span>核心能力 (Core Capabilities)</span>
                 </CardTitle>
-                <CardDescription>
-                  AI 推理出的事故因果链与关键波形数据。
-                </CardDescription>
+                <CardDescription>选择一项能力开始任务，或直接在下方输入指令。</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
-                <WaveformDisplay />
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  
+                  <div className="p-4 border rounded-lg hover:bg-muted/50 cursor-pointer transition-colors">
+                    <h4 className="font-medium text-sm mb-1">录波分析 (Waveform Analysis)</h4>
+                    <p className="text-xs text-muted-foreground">解析故障录波文件，分析电气量变化。</p>
+                  </div>
+                  <div className="p-4 border rounded-lg hover:bg-muted/50 cursor-pointer transition-colors">
+                    <h4 className="font-medium text-sm mb-1">SOE推理 (SOE Reasoning)</h4>
+                    <p className="text-xs text-muted-foreground">基于 SOE 记录推断事故发生顺序和原因。</p>
+                  </div>
+                  <div className="p-4 border rounded-lg hover:bg-muted/50 cursor-pointer transition-colors">
+                    <h4 className="font-medium text-sm mb-1">事故报告 (Accident Report)</h4>
+                    <p className="text-xs text-muted-foreground">自动生成详细的事故分析报告。</p>
+                  </div>
+                </div>
                 <Separator />
                 <div className="space-y-2">
-                  <h3 className="flex items-center space-x-2 text-sm font-medium">
-                    <Activity className="h-4 w-4" />
-                    <span>AI 诊断结论</span>
-                  </h3>
-                  <div className="bg-muted text-muted-foreground min-h-[120px] rounded-md p-3 text-sm">
-                    <p>
-                      AI 推理结果：[🔴 结论] A 相短路。保护动作正确，动作时间
-                      35ms， 符合要求。故障类型已锁定。
-                    </p>
-                    <p className="mt-2 text-xs">AI 思考链条可追溯至聊天记录…</p>
+                    <h3 className="text-sm font-medium">任务指令</h3>
+                    <Textarea 
+                        placeholder="例如：分析上传的录波文件，判断故障类型和故障点位置。"
+                        rows={4}
+                    />
+                </div>
+                <Button 
+                    onClick={handleStartTask} 
+                    className="w-full"
+                >
+                    <MessageSquare className="w-4 h-4 mr-2" />
+                    发送指令
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* Side Panel: Quick Tools / Context */}
+            <Card className="lg:col-span-1">
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center space-x-2">
+                  <Layers className="w-5 h-5 text-primary" />
+                  <span>快捷工具</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <h3 className="text-sm font-medium">上下文检索</h3>
+                  <Button variant="outline" className="w-full justify-start">
+                    <Search className="w-4 h-4 mr-2" />
+                    搜索相关文档
+                  </Button>
+                </div>
+                <Separator />
+                <div className="space-y-2">
+                  <h3 className="text-sm font-medium">历史记录</h3>
+                  <div className="text-sm text-muted-foreground text-center py-4">
+                    暂无最近任务记录
                   </div>
                 </div>
               </CardContent>

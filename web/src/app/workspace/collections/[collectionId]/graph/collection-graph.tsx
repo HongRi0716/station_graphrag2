@@ -27,12 +27,15 @@ import {
 } from '@/components/ui/popover';
 import { Tooltip, TooltipContent } from '@/components/ui/tooltip';
 import { TooltipTrigger } from '@radix-ui/react-tooltip';
-import Color from 'color';
 import * as d3 from 'd3';
 import _ from 'lodash';
 import {
-  Check,
+  AlertTriangle,
+  ArrowLeft,
   ChevronDown,
+  Database,
+  FileText,
+  FolderOpen,
   LoaderCircle,
   Maximize,
   Minimize,
@@ -54,6 +57,26 @@ const ForceGraph2D = dynamic(
   },
 );
 
+// --- Types ---
+
+type ViewMode = 'hierarchy' | 'graph';
+
+type ProcessedNode = GraphNode & {
+  sourceCollections: Set<string>;
+  isBridge: boolean;
+  isDocument: boolean;
+  isCollectionRoot?: boolean;
+  collectionId?: string;
+  docId?: string;
+  degree: number;
+  value: number;
+  label: string;
+};
+
+type ProcessedEdge = GraphEdge & {
+  sourceCollectionId?: string;
+};
+
 export const CollectionGraph = ({
   marketplace = false,
   mode = 'contextual',
@@ -65,6 +88,16 @@ export const CollectionGraph = ({
 }) => {
   const params = useParams();
   const currentCollectionId = collectionId || (params.collectionId as string);
+
+  // --- State ---
+  const [viewMode, setViewMode] = useState<ViewMode>(
+    mode === 'global' ? 'hierarchy' : 'graph',
+  );
+  const [targetContext, setTargetContext] = useState<{
+    collectionId: string;
+    documentId?: string;
+  } | null>(null);
+
   const [fullscreen, setFullscreen] = useState<boolean>(false);
   const { resolvedTheme } = useTheme();
   const page_graph = useTranslations('page_graph');
@@ -74,9 +107,10 @@ export const CollectionGraph = ({
   const graphRef = useRef<any>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [graphData, setGraphData] = useState<{
-    nodes: GraphNode[];
-    links: GraphEdge[];
+    nodes: ProcessedNode[];
+    links: ProcessedEdge[];
   }>();
+  const [prunedCount, setPrunedCount] = useState(0);
   const [mergeSuggestion, setMergeSuggestion] =
     useState<MergeSuggestionsResponse>();
   const [mergeSuggestionOpen, setMergeSuggestionOpen] =
@@ -85,99 +119,402 @@ export const CollectionGraph = ({
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
 
   const [allEntities, setAllEntities] = useState<{
-    [key in string]: GraphNode[];
+    [key in string]: ProcessedNode[];
   }>({});
   const [activeEntities, setActiveEntities] = useState<string[]>([]);
 
   const [highlightNodes, setHighlightNodes] = useState(new Set());
   const [highlightLinks, setHighlightLinks] = useState(new Set());
-  const [hoverNode, setHoverNode] = useState<GraphNode>();
-  const [activeNode, setActiveNode] = useState<GraphNode>();
+  const [hoverNode, setHoverNode] = useState<ProcessedNode>();
+  const [activeNode, setActiveNode] = useState<ProcessedNode>();
   const [globalSearchQuery, setGlobalSearchQuery] = useState('');
   const color = useMemo(() => d3.scaleOrdinal(d3.schemeCategory10), []);
 
-  const { NODE_MIN, NODE_MAX } = useMemo(
+  const { NODE_MIN, NODE_MAX, SAFE_NODE_LIMIT } = useMemo(
     () => ({
-      NODE_MIN: 7,
+      NODE_MIN: 6,
       NODE_MAX: 24,
-      LINK_MIN: 18,
-      LINK_MAX: 36,
+      LINK_MIN: 1,
+      LINK_MAX: 4,
+      SAFE_NODE_LIMIT: 2000,
     }),
     [],
   );
 
-  const getGraphData = useCallback(
-    async (query?: string) => {
-      if (typeof currentCollectionId !== 'string') return;
-      setLoading(true);
+  // --- Helper: Safe Round Rect for Canvas ---
+  const drawRoundRect = useCallback(
+    (
+      ctx: CanvasRenderingContext2D,
+      x: number,
+      y: number,
+      w: number,
+      h: number,
+      r: number,
+    ) => {
+      if (ctx.roundRect) {
+        // Use native roundRect if available (Chrome 99+, Safari 16+)
+        ctx.roundRect(x, y, w, h, r);
+      } else {
+        // Fallback for older browsers using arcTo
+        if (w < 2 * r) r = w / 2;
+        if (h < 2 * r) r = h / 2;
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.arcTo(x + w, y, x + w, y + h, r);
+        ctx.arcTo(x + w, y + h, x, y + h, r);
+        ctx.arcTo(x, y + h, x, y, r);
+        ctx.arcTo(x, y, x + w, y, r);
+        ctx.closePath();
+      }
+    },
+    [],
+  );
 
-      try {
-        let data: KnowledgeGraph;
+  // --- Data Processing: Hierarchy (Collections -> Docs -> Entities) ---
+  const fetchHierarchyData = useCallback(async () => {
+    setLoading(true);
+    setGraphData(undefined); // Clear previous data to avoid ghosting
+    try {
+      // Call global hierarchy API
+      const res = await apiClient.graphApi.graphsHierarchyGlobalPost({
+        graphsHierarchyGlobalPostRequest: { query: '', top_k: 100 },
+      });
+      const data = res.data as any;
 
-        if (!marketplace) {
-          if (mode === 'global') {
-            if (!query) {
-              setLoading(false);
-              return;
-            }
-            const res =
-              await apiClient.graphApi.collectionsCollectionIdGraphsGet(
-                {
-                  collectionId: 'all',
-                },
-                { timeout: 1000 * 30 },
-              );
-            data = res.data;
-          } else {
-            const res =
-              await apiClient.graphApi.collectionsCollectionIdGraphsGet(
-                {
-                  collectionId: currentCollectionId,
-                },
-                {
-                  timeout: 1000 * 20,
-                },
-              );
-            data = res.data;
+      const nodes = data.nodes || [];
+      const edges = data.edges || [];
+
+      // Convert API response to ProcessedNode format for visualization
+      const processedNodes: ProcessedNode[] = nodes.map((node: any) => {
+        const isCollection = node.type === 'collection';
+        const isDocument = node.type === 'document';
+        const isEntity = node.type === 'entity';
+
+        return {
+          id: node.id,
+          label: node.name || node.id,
+          value: isCollection ? 20 : isDocument ? 10 : 8,
+          degree: 1,
+          isCollectionRoot: isCollection,
+          collectionId: node.metadata?.collection_id,
+          docId: node.metadata?.document_id,
+          isDocument: isDocument,
+          isBridge: false,
+          sourceCollections: new Set(
+            node.metadata?.collection_id ? [node.metadata.collection_id] : [],
+          ),
+          properties: { entity_type: node.type?.toUpperCase() || 'UNKNOWN' },
+          labels: [],
+        };
+      });
+
+      // Convert edges to ProcessedEdge format
+      const processedEdges: ProcessedEdge[] = edges.map((edge: any) => ({
+        source: edge.source,
+        target: edge.target,
+        id: `E-${edge.source}-${edge.target}`,
+        type: edge.type || 'DIRECTED',
+        properties: { label: edge.label },
+      }));
+
+      setGraphData({ nodes: processedNodes, links: processedEdges });
+
+      // Set entity types for legend
+      const entityTypes = _.groupBy(
+        processedNodes,
+        (n) => n.properties?.entity_type || 'UNKNOWN',
+      );
+      setAllEntities(entityTypes);
+      setActiveEntities(Object.keys(entityTypes));
+      setPrunedCount(0); // Reset pruned count for hierarchy
+    } catch (e) {
+      console.error(e);
+      toast.error('Failed to load global overview');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // --- Data Processing: Entity Graph (Pruning & Filtering) ---
+  const processAndPruneGraph = useCallback(
+    (rawNodes: GraphNode[], rawEdges: GraphEdge[], filterDocId?: string) => {
+      const nodeMap = new Map<string, ProcessedNode>();
+
+      // 1. Initialize
+      rawNodes.forEach((n) => {
+        const isDoc =
+          n.properties?.entity_type === 'DOCUMENT' ||
+          n.labels?.includes('Document');
+        // Generate label from labels array or use id
+        const label =
+          n.labels && n.labels.length > 0 ? n.labels[0] : String(n.id);
+        nodeMap.set(n.id, {
+          ...n,
+          label,
+          sourceCollections: new Set(),
+          isBridge: false,
+          isDocument: isDoc,
+          degree: 0,
+          value: NODE_MIN,
+        });
+      });
+
+      // 2. Analyze Edges
+      rawEdges.forEach((edge) => {
+        // @ts-expect-error dynamic props
+        const collId = edge.properties?.collection_id || edge.collection_id;
+        const sourceId =
+          typeof edge.source === 'object'
+            ? (edge.source as any).id
+            : edge.source;
+        const targetId =
+          typeof edge.target === 'object'
+            ? (edge.target as any).id
+            : edge.target;
+
+        const sNode = nodeMap.get(sourceId);
+        const tNode = nodeMap.get(targetId);
+
+        if (sNode && tNode) {
+          sNode.degree++;
+          tNode.degree++;
+          if (collId) {
+            sNode.sourceCollections.add(collId);
+            tNode.sourceCollections.add(collId);
           }
-        } else {
-          const res =
-            await apiClient.defaultApi.marketplaceCollectionsCollectionIdGraphGet(
-              {
-                collectionId: currentCollectionId,
-              },
-              {
-                timeout: 1000 * 20,
-              },
-            );
-          data = res.data as KnowledgeGraph;
         }
+      });
 
-        const nodes =
-          data.nodes?.map((n) => {
-            const targetCount = data.edges.filter(
-              (edg) => edg.target === n.id,
-            ).length;
-            const sourceCount = data.edges.filter(
-              (edg) => edg.source === n.id,
-            ).length;
-            return {
-              ...n,
-              value: Math.max(targetCount, sourceCount, NODE_MIN),
-            };
-          }) || [];
-        const links = data.edges || [];
+      // 3. Filter by Document (if requested)
+      // Ego-Graph Strategy:
+      // 1. Find nodes that represent the document (either by ID matching or property)
+      // 2. Find all edges connected to those nodes
+      // 3. Find all neighbors connected by those edges
+      let finalNodes = Array.from(nodeMap.values());
+      let finalEdges = rawEdges;
 
-        setGraphData({ nodes, links });
-        setAllEntities(_.groupBy(nodes, (n) => n.properties.entity_type));
+      if (filterDocId) {
+        const relatedNodeIds = new Set<string>();
+
+        // Find the node that IS the document
+        const documentNode = finalNodes.find(
+          (n) => n.id === filterDocId || n.id.includes(filterDocId),
+        );
+
+        if (documentNode) relatedNodeIds.add(documentNode.id);
+
+        // Filter edges that reference this document
+        const relevantEdges = rawEdges.filter((e) => {
+          const s =
+            typeof e.source === 'object' ? (e.source as any).id : e.source;
+          const t =
+            typeof e.target === 'object' ? (e.target as any).id : e.target;
+
+          // Condition 1: Explicit source metadata
+          const isSource =
+            e.properties?.source_doc_id === filterDocId ||
+            (e as any).source_doc_id === filterDocId;
+
+          // Condition 2: Connected to the document node found above
+          const isConnected =
+            documentNode && (s === documentNode.id || t === documentNode.id);
+
+          return isSource || isConnected;
+        });
+
+        if (relevantEdges.length > 0) {
+          relevantEdges.forEach((e) => {
+            relatedNodeIds.add(
+              typeof e.source === 'object' ? (e.source as any).id : e.source,
+            );
+            relatedNodeIds.add(
+              typeof e.target === 'object' ? (e.target as any).id : e.target,
+            );
+          });
+          finalEdges = relevantEdges;
+          finalNodes = finalNodes.filter((n) => relatedNodeIds.has(n.id));
+        }
+      }
+
+      // 4. Styling & Bridges
+      finalNodes.forEach((node) => {
+        if (node.sourceCollections.size > 1) {
+          node.isBridge = true;
+          node.value = NODE_MAX;
+        } else if (node.isDocument) {
+          node.value = NODE_MAX * 0.8;
+        } else {
+          node.value = Math.min(
+            NODE_MAX,
+            Math.max(NODE_MIN, NODE_MIN + Math.log2(node.degree + 1) * 2),
+          );
+        }
+      });
+
+      // 5. Safety Pruning
+      let pruned = 0;
+      if (!filterDocId && finalNodes.length > SAFE_NODE_LIMIT) {
+        finalNodes.sort((a, b) => {
+          if (a.isBridge !== b.isBridge) return a.isBridge ? -1 : 1;
+          if (a.isDocument !== b.isDocument) return a.isDocument ? -1 : 1;
+          return b.degree - a.degree;
+        });
+        const keptSet = new Set(
+          finalNodes.slice(0, SAFE_NODE_LIMIT).map((n) => n.id),
+        );
+        pruned = finalNodes.length - SAFE_NODE_LIMIT;
+        finalNodes = finalNodes.slice(0, SAFE_NODE_LIMIT);
+        finalEdges = finalEdges.filter((e) => {
+          const s =
+            typeof e.source === 'object' ? (e.source as any).id : e.source;
+          const t =
+            typeof e.target === 'object' ? (e.target as any).id : e.target;
+          return keptSet.has(s) && keptSet.has(t);
+        });
+      }
+
+      setPrunedCount(pruned);
+      return { nodes: finalNodes, links: finalEdges };
+    },
+    [NODE_MIN, NODE_MAX, SAFE_NODE_LIMIT],
+  );
+
+  // --- API Call: Entity Graph ---
+  const fetchEntityGraph = useCallback(
+    async (cId: string, dId?: string, query?: string) => {
+      setLoading(true);
+      setGraphData(undefined); // Clear previous to show loading state clearly
+      try {
+        // Check if we're in global mode with search query
+        if (cId === 'all' && query) {
+          // Call global graph search API
+          const res = await apiClient.graphApi.graphsSearchGlobalPost({
+            graphsSearchGlobalPostRequest: { query, top_k: 100 },
+          });
+          const data = res.data as any;
+
+          // Process global search results
+          const nodes = data.nodes || [];
+          const edges = data.edges || [];
+
+          setGraphData({ nodes, links: edges });
+          setAllEntities(
+            _.groupBy(nodes, (n: any) => n.properties?.entity_type || 'ENTITY'),
+          );
+          setActiveEntities(
+            Object.keys(
+              _.groupBy(
+                nodes,
+                (n: any) => n.properties?.entity_type || 'ENTITY',
+              ),
+            ),
+          );
+        } else if (cId !== 'all') {
+          // Normal collection graph
+          const res = await apiClient.graphApi.collectionsCollectionIdGraphsGet(
+            { collectionId: cId },
+            { timeout: 60000 },
+          );
+          const data = res.data as KnowledgeGraph;
+
+          // Process with Document ID filter if present
+          const processed = processAndPruneGraph(
+            data.nodes || [],
+            data.edges || [],
+            dId,
+          );
+
+          setGraphData(processed);
+          setAllEntities(
+            _.groupBy(processed.nodes, (n) => n.properties?.entity_type || ''),
+          );
+          setActiveEntities(
+            Object.keys(
+              _.groupBy(
+                processed.nodes,
+                (n) => n.properties?.entity_type || '',
+              ),
+            ),
+          );
+        }
       } catch (e) {
         console.error(e);
-        toast.error('Failed to load graph data');
+        toast.error('Failed to load graph');
       } finally {
         setLoading(false);
       }
     },
-    [NODE_MIN, marketplace, currentCollectionId, mode],
+    [processAndPruneGraph],
+  );
+
+  // --- Handlers ---
+
+  const handleCloseDetail = useCallback(() => {
+    setActiveNode(undefined);
+    setHoverNode(undefined);
+    highlightNodes.clear();
+    highlightLinks.clear();
+  }, [highlightLinks, highlightNodes]);
+
+  const handleNodeClick = useCallback(
+    (node: any) => {
+      // Convert to ProcessedNode - ForceGraph2D passes a generic node object
+      const processedNode = node as ProcessedNode;
+
+      if (viewMode === 'hierarchy') {
+        // Drill down logic
+        if (processedNode.isCollectionRoot && processedNode.collectionId) {
+          // Enter Collection Graph
+          setViewMode('graph');
+          setTargetContext({ collectionId: processedNode.collectionId });
+          fetchEntityGraph(processedNode.collectionId);
+          toast.info(`Loading graph for collection: ${processedNode.label}`);
+        } else if (
+          processedNode.isDocument &&
+          processedNode.collectionId &&
+          processedNode.docId
+        ) {
+          // Enter Document Graph (Filtered)
+          setViewMode('graph');
+          setTargetContext({
+            collectionId: processedNode.collectionId,
+            documentId: processedNode.docId,
+          });
+          fetchEntityGraph(processedNode.collectionId, processedNode.docId);
+          toast.info(`Loading graph for document: ${processedNode.label}`);
+        }
+      } else {
+        // Normal graph interaction (show details)
+        if (activeNode?.id === processedNode.id) handleCloseDetail();
+        else setActiveNode(processedNode);
+      }
+    },
+    [viewMode, activeNode, fetchEntityGraph, handleCloseDetail],
+  );
+
+  const handleBackToHierarchy = useCallback(() => {
+    setViewMode('hierarchy');
+    setTargetContext(null);
+    setHighlightNodes(new Set()); // Clear highlighting
+    setHighlightLinks(new Set()); // Clear link highlighting
+    setActiveNode(undefined); // Clear active node
+    setHoverNode(undefined); // Clear hover node
+    fetchHierarchyData(); // Reload hierarchy
+  }, [fetchHierarchyData]);
+
+  const getGraphData = useCallback(
+    async (query?: string) => {
+      if (typeof currentCollectionId !== 'string') return;
+      if (mode === 'contextual') {
+        fetchEntityGraph(currentCollectionId);
+        return;
+      }
+      // For global mode with query, use fetchEntityGraph
+      if (mode === 'global' && query) {
+        fetchEntityGraph('all', undefined, query);
+      }
+    },
+    [currentCollectionId, mode, fetchEntityGraph],
   );
 
   const getMergeSuggestions = useCallback(async () => {
@@ -202,13 +539,6 @@ export const CollectionGraph = ({
       console.error(e);
     }
   }, [marketplace, currentCollectionId, mode]);
-
-  const handleCloseDetail = useCallback(() => {
-    setActiveNode(undefined);
-    setHoverNode(undefined);
-    highlightNodes.clear();
-    highlightLinks.clear();
-  }, [highlightLinks, highlightNodes]);
 
   const handleResizeContainer = useCallback(() => {
     const container = containerRef.current;
@@ -241,15 +571,30 @@ export const CollectionGraph = ({
 
     if (activeNode) {
       const nodeLinks = graphData?.links.filter((link) => {
-        return (
-          // @ts-expect-error link.source.id link.target.id
-          link.source.id === activeNode.id || link.target.id === activeNode.id
-        );
+        const sourceId =
+          typeof link.source === 'object'
+            ? (link.source as any).id
+            : link.source;
+        const targetId =
+          typeof link.target === 'object'
+            ? (link.target as any).id
+            : link.target;
+        return sourceId === activeNode.id || targetId === activeNode.id;
       });
-      nodeLinks?.forEach((link: GraphEdge) => {
+      nodeLinks?.forEach((link: ProcessedEdge) => {
         highlightLinks.add(link);
-        highlightNodes.add(link.source);
-        highlightNodes.add(link.target);
+        const sourceId =
+          typeof link.source === 'object'
+            ? (link.source as any).id
+            : link.source;
+        const targetId =
+          typeof link.target === 'object'
+            ? (link.target as any).id
+            : link.target;
+        const sourceNode = graphData?.nodes.find((n) => n.id === sourceId);
+        const targetNode = graphData?.nodes.find((n) => n.id === targetId);
+        if (sourceNode) highlightNodes.add(sourceNode);
+        if (targetNode) highlightNodes.add(targetNode);
       });
       highlightNodes.add(activeNode);
       // @ts-expect-error node.x node.y
@@ -261,19 +606,44 @@ export const CollectionGraph = ({
     }
     setHighlightNodes(highlightNodes);
     setHighlightLinks(highlightLinks);
-  }, [activeNode, graphData?.links, highlightLinks, highlightNodes]);
+  }, [
+    activeNode,
+    graphData?.links,
+    graphData?.nodes,
+    highlightLinks,
+    highlightNodes,
+  ]);
 
+  // Initial Load Router
   useEffect(() => {
-    if (mode === 'contextual') {
-      getGraphData();
+    if (mode === 'global') {
+      if (viewMode === 'hierarchy') {
+        fetchHierarchyData();
+      }
+    } else {
+      // Contextual mode (single collection)
+      fetchEntityGraph(currentCollectionId);
       getMergeSuggestions();
     }
-  }, [getGraphData, getMergeSuggestions, mode]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, viewMode]); // Only run on mode mount or if manually triggered
 
   const handleGlobalSearchSubmit = useCallback(() => {
     if (!globalSearchQuery.trim()) return;
-    getGraphData(globalSearchQuery);
-  }, [globalSearchQuery, getGraphData]);
+    // If searching in hierarchy mode, switch to graph mode and search all
+    if (viewMode === 'graph') {
+      fetchEntityGraph(
+        targetContext?.collectionId || 'all',
+        undefined,
+        globalSearchQuery,
+      );
+    } else {
+      // In hierarchy, switch to graph mode and search global entities
+      setViewMode('graph');
+      setTargetContext({ collectionId: 'all' });
+      fetchEntityGraph('all', undefined, globalSearchQuery);
+    }
+  }, [globalSearchQuery, viewMode, targetContext, fetchEntityGraph]);
 
   return (
     <div
@@ -283,60 +653,90 @@ export const CollectionGraph = ({
         'z-49': fullscreen,
       })}
     >
+      {/* Header Bar */}
       <div
         className={cn('mb-2 flex flex-row items-center justify-between gap-2', {
           'px-2': fullscreen,
           'pt-2': fullscreen,
         })}
       >
-        {mode === 'contextual' ? (
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="outline" className="w-40 justify-between">
-                {page_graph('node_search')}
-                <ChevronDown />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-[200px] p-0" align="start">
-              <Command>
-                <CommandInput placeholder="Search node..." className="h-9" />
-                <CommandList className="max-h-60">
-                  <CommandEmpty>No node found.</CommandEmpty>
-                  <CommandGroup>
-                    {_.map(graphData?.nodes, (node, key) => {
-                      const isActive = activeNode?.id === node.id;
-                      return (
-                        <CommandItem
-                          key={key}
-                          className={cn('capitalize')}
-                          value={node.id}
-                          onSelect={() => {
-                            setActiveNode(isActive ? undefined : node);
-                          }}
-                        >
-                          <div className="truncate">{node.id}</div>
-                          <Check
-                            className={cn(
-                              'ml-auto',
-                              isActive ? 'opacity-100' : 'opacity-0',
-                            )}
-                          />
-                        </CommandItem>
-                      );
-                    })}
-                  </CommandGroup>
-                </CommandList>
-              </Command>
-            </PopoverContent>
-          </Popover>
-        ) : (
-          <div className="flex items-center gap-2">
-            <Badge variant="secondary" className="text-sm font-normal">
-              {page_graph('global_view')}
+        {/* Left: Indicators / Back Button */}
+        <div className="flex items-center gap-2">
+          {mode === 'global' && viewMode === 'graph' && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleBackToHierarchy}
+              className="gap-1 pl-0"
+            >
+              <ArrowLeft size={16} />
+              Back to Overview
+            </Button>
+          )}
+
+          {mode === 'global' && viewMode === 'hierarchy' && (
+            <Badge
+              variant="outline"
+              className="border-primary/50 text-primary gap-1 text-sm font-normal"
+            >
+              <FolderOpen size={14} /> Global Overview
             </Badge>
-          </div>
-        )}
+          )}
+
+          {mode === 'contextual' && (
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" className="w-40 justify-between">
+                  {page_graph('node_search')}
+                  <ChevronDown />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[200px] p-0" align="start">
+                <Command>
+                  <CommandInput placeholder="Search node..." className="h-9" />
+                  <CommandList className="max-h-60">
+                    <CommandEmpty>No node found.</CommandEmpty>
+                    <CommandGroup>
+                      {graphData?.nodes.slice(0, 50).map((node) => (
+                        <CommandItem
+                          key={node.id}
+                          value={node.id}
+                          onSelect={() => setActiveNode(node)}
+                        >
+                          <div className="truncate">{node.label}</div>
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+          )}
+
+          {/* Global Search Input */}
+          {mode === 'global' && (
+            <div className="relative w-60">
+              <Search className="text-muted-foreground absolute top-2.5 left-2 h-4 w-4" />
+              <Input
+                placeholder="Search entities..."
+                className="h-9 pl-8"
+                value={globalSearchQuery}
+                onChange={(e) => setGlobalSearchQuery(e.target.value)}
+                onKeyDown={(e) =>
+                  e.key === 'Enter' && handleGlobalSearchSubmit()
+                }
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Right: Tools */}
         <div className="flex flex-row items-center gap-2">
+          {prunedCount > 0 && (
+            <Badge variant="destructive" className="flex gap-1">
+              <AlertTriangle size={12} /> {prunedCount} Hidden
+            </Badge>
+          )}
           {!marketplace &&
             mode !== 'global' &&
             !_.isEmpty(mergeSuggestion?.suggestions) && (
@@ -364,14 +764,13 @@ export const CollectionGraph = ({
           <Button
             size="icon"
             variant="outline"
-            className="cursor-pointer"
             onClick={() => {
-              if (mode === 'global') {
-                handleGlobalSearchSubmit();
-              } else {
-                getGraphData();
-                getMergeSuggestions();
-              }
+              if (viewMode === 'hierarchy') fetchHierarchyData();
+              else
+                fetchEntityGraph(
+                  targetContext?.collectionId || currentCollectionId,
+                  targetContext?.documentId,
+                );
             }}
           >
             <LoaderCircle className={loading ? 'animate-spin' : ''} />
@@ -448,33 +847,33 @@ export const CollectionGraph = ({
             </div>
           )}
 
+        {/* Legends */}
         <div className="bg-background pointer-events-none absolute top-0 right-0 left-0 z-10 flex flex-row flex-wrap gap-1 rounded-xl p-2">
           {_.map(allEntities, (item, key) => {
             const isActive = activeEntities.includes(key);
-            //@ts-expect-error entity error
-            const title = page_graph(`entity_${key}`);
             return (
               <Badge
                 key={key}
                 className={cn(
-                  'pointer-events-auto cursor-pointer capitalize',
-                  isActive ? '' : 'border-transparent',
+                  'pointer-events-auto flex cursor-pointer gap-1 capitalize',
+                  !activeEntities.includes(key) && 'opacity-50',
                 )}
                 style={{
-                  backgroundColor: color(key),
-                  opacity: isActive ? 1 : 0.7,
+                  backgroundColor: activeEntities.includes(key)
+                    ? color(key)
+                    : undefined,
                 }}
                 onClick={() =>
-                  setActiveEntities((items) => {
-                    if (isActive) {
-                      return _.reject(items, (item) => item === key);
-                    } else {
-                      return _.uniq(items.concat(key));
-                    }
-                  })
+                  setActiveEntities((prev) =>
+                    prev.includes(key)
+                      ? prev.filter((k) => k !== key)
+                      : [...prev, key],
+                  )
                 }
               >
-                {title} ({item.length})
+                {key === 'COLLECTION' && <Database size={10} />}
+                {key === 'DOCUMENT' && <FileText size={10} />}
+                {key} ({item.length})
               </Badge>
             );
           })}
@@ -484,44 +883,40 @@ export const CollectionGraph = ({
           graphData={graphData}
           width={dimensions.width}
           height={dimensions.height}
-          nodeLabel={(nod) => String(nod.id)}
+          nodeLabel="label"
+          warmupTicks={100}
+          cooldownTicks={50}
           ref={graphRef}
           nodeVisibility={(node) => {
-            return (
-              !node.properties.entity_type ||
-              activeEntities.includes(node.properties.entity_type)
-            );
+            const nodeType =
+              (node as ProcessedNode).properties?.entity_type ||
+              (node as any).type ||
+              'UNKNOWN';
+            return activeEntities.includes(nodeType);
           }}
-          onNodeClick={(node) => {
-            if (activeNode?.id === node.id) {
-              handleCloseDetail();
-              return;
-            }
-            setActiveNode(node as GraphNode);
-          }}
+          onNodeClick={handleNodeClick}
           onNodeHover={(node) => {
             if (activeNode) return;
             highlightNodes.clear();
             highlightLinks.clear();
             if (node) {
+              const nodeId = (node as any).id;
               const nodeLinks = graphData?.links.filter((link) => {
-                //@ts-expect-error link.source.id link.target.id
-                return link.source.id === node.id || link.target.id === node.id;
+                const sourceId =
+                  typeof link.source === 'object'
+                    ? (link.source as any).id
+                    : link.source;
+                const targetId =
+                  typeof link.target === 'object'
+                    ? (link.target as any).id
+                    : link.target;
+                return sourceId === nodeId || targetId === nodeId;
               });
-              nodeLinks?.forEach((link: GraphEdge) => {
+              nodeLinks?.forEach((link: ProcessedEdge) => {
                 highlightLinks.add(link);
               });
             }
-            setHoverNode(
-              node
-                ? {
-                    ...node,
-                    id: String(node.id),
-                    labels: [],
-                    properties: {},
-                  }
-                : undefined,
-            );
+            setHoverNode(node ? (node as ProcessedNode) : undefined);
             setHighlightNodes(highlightNodes);
             setHighlightLinks(highlightLinks);
           }}
@@ -535,74 +930,83 @@ export const CollectionGraph = ({
             setHighlightNodes(highlightNodes);
             setHighlightLinks(highlightLinks);
           }}
-          nodeCanvasObject={(node, ctx) => {
+          nodeCanvasObject={(node: any, ctx) => {
             const x = node.x || 0;
             const y = node.y || 0;
+            const size = node.value || 5;
+            const isHover = node === hoverNode;
+            const isActive = node === activeNode;
+            const processedNode = node as ProcessedNode;
 
-            let size = Math.min(node.value, NODE_MAX);
-            if (node === hoverNode) size += 1;
             ctx.beginPath();
-            ctx.arc(x, y, size, 0, 2 * Math.PI, false);
 
-            const colorNormal = color(node.properties.entity_type || '');
-            const colorSecondary =
-              resolvedTheme === 'dark'
-                ? Color(colorNormal).grayscale().darken(0.3)
-                : Color(colorNormal).grayscale().lighten(0.6);
-            ctx.fillStyle =
-              highlightNodes.size === 0 || highlightNodes.has(node)
-                ? colorNormal
-                : colorSecondary.string();
+            // Shape Logic
+            if (processedNode.isCollectionRoot) {
+              // Collection = Rounded Rect / Folder-ish
+              // [FIX] Use safe drawer instead of roundRect for compatibility
+              drawRoundRect(
+                ctx,
+                x - size,
+                y - size * 0.8,
+                size * 2,
+                size * 1.6,
+                4,
+              );
+              ctx.fillStyle = isActive || isHover ? '#3b82f6' : '#60a5fa'; // Blue
+            } else if (processedNode.isDocument) {
+              // Document = Rect
+              ctx.rect(x - size * 0.8, y - size, size * 1.6, size * 2);
+              ctx.fillStyle = isActive || isHover ? '#10b981' : '#34d399'; // Green
+            } else {
+              // Entity = Circle
+              ctx.arc(x, y, size, 0, 2 * Math.PI);
+              ctx.fillStyle =
+                isActive || isHover
+                  ? '#f43f5e'
+                  : color(processedNode.properties?.entity_type || '');
+            }
+
             ctx.fill();
 
-            // node circle
-            ctx.beginPath();
-            ctx.arc(x, y, size, 0, 2 * Math.PI, false);
-            ctx.lineWidth = 0.5;
-            ctx.strokeStyle = highlightNodes.has(node)
-              ? Color('#FFF').grayscale().string()
-              : '#FFF';
-            ctx.stroke();
-
-            // node label
-            let fontSize = 16;
-            const offset = 2;
-            ctx.font = `${fontSize}px Arial`;
-            let textWidth = ctx.measureText(String(node.id)).width - offset;
-            do {
-              fontSize -= 1;
-              ctx.font = `${fontSize}px Arial`;
-              textWidth = ctx.measureText(String(node.id)).width - offset;
-            } while (textWidth > size && fontSize > 0);
-            ctx.fillStyle = '#fff';
-            if (fontSize <= 0) {
-              fontSize = 1;
-              ctx.font = `${fontSize}px Arial`;
-              textWidth = ctx.measureText(String(node.id)).width - offset;
+            // Label (LOD)
+            // Show label if: Hierarchy mode, OR Hover, OR High Value Node
+            if (viewMode === 'hierarchy' || isHover || size > 10) {
+              const label = processedNode.label || String(node.id);
+              const fontSize = processedNode.isCollectionRoot ? 14 : 10; // Larger for collections
+              ctx.font = `${fontSize}px Sans-Serif`;
+              ctx.fillStyle = resolvedTheme === 'dark' ? '#fff' : '#000';
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'top';
+              ctx.fillText(label, x, y + size + 2);
             }
-            ctx.fillText(
-              String(node.id),
-              x - (textWidth + offset) / 2,
-              y + fontSize / 2,
-            );
           }}
-          nodePointerAreaPaint={(node, color, ctx) => {
+          nodePointerAreaPaint={(node: any, color, ctx) => {
             const x = node.x || 0;
             const y = node.y || 0;
-            const size = Math.min(node.value, NODE_MAX);
+            const size = node.value || 5;
+            const processedNode = node as ProcessedNode;
             ctx.fillStyle = color;
             ctx.beginPath();
-            ctx.arc(x, y, size, 0, 2 * Math.PI, false);
+
+            if (processedNode.isCollectionRoot) {
+              // [FIX] Use safe drawer for compatibility
+              drawRoundRect(
+                ctx,
+                x - size,
+                y - size * 0.8,
+                size * 2,
+                size * 1.6,
+                4,
+              );
+            } else if (processedNode.isDocument) {
+              ctx.rect(x - size * 0.8, y - size, size * 1.6, size * 2);
+            } else {
+              ctx.arc(x, y, size, 0, 2 * Math.PI, false);
+            }
             ctx.fill();
           }}
           linkLabel="id"
-          linkColor={(link) => {
-            if (resolvedTheme === 'dark') {
-              return highlightLinks.has(link) ? '#585858' : '#383838';
-            } else {
-              return highlightLinks.has(link) ? '#BBB' : '#DDD';
-            }
-          }}
+          linkColor={() => (resolvedTheme === 'dark' ? '#555' : '#ccc')}
           linkWidth={(link) => {
             return highlightLinks.has(link) ? 2 : 1;
           }}
