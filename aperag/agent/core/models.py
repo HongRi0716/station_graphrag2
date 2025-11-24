@@ -24,6 +24,10 @@ class AgentRole(str, Enum):
     CALCULATOR = "calculator"  # 整定计算师：参数核算
     SCRIBE = "scribe"  # 文书专员：自动填报/语音转录
     SENTINEL = "sentinel"  # 巡视哨兵：视频监控/实时安防
+    OPERATION_TICKET = "operation_ticket"  # 操作票专家：操作票编制审核
+    WORK_PERMIT = "work_permit"  # 工作票专家：工作票编制审核
+    ACCIDENT_DEDUCTION = "accident_deduction"  # 事故预想专家：事故推演
+    POWER_GUARANTEE = "power_guarantee"  # 保电方案专家：保电方案编制
 
 
 class AgentStatus(str, Enum):

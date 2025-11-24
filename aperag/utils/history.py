@@ -16,6 +16,8 @@ import json
 import logging
 import time
 from abc import ABC, abstractmethod
+from datetime import date, datetime
+from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
 from aperag.chat.history import (
@@ -242,12 +244,31 @@ async def query_chat_messages(user: str, chat_id: str):
         return []
 
 
+def _serialize(obj: Any):
+    """Convert common non-JSON types (datetime, Decimal, pydantic objects) to JSON-safe primitives."""
+    if obj is None:
+        return None
+    if isinstance(obj, (datetime, date)):
+        return obj.isoformat()
+    if isinstance(obj, Decimal):
+        return float(obj)
+    if isinstance(obj, dict):
+        return {k: _serialize(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple, set)):
+        return [_serialize(item) for item in obj]
+    if hasattr(obj, "model_dump"):
+        return _serialize(obj.model_dump())
+    if hasattr(obj, "__dict__"):
+        return _serialize(vars(obj))
+    return obj
+
+
 def success_response(message_id, data):
     return json.dumps(
         {
             "type": "message",
             "id": message_id,
-            "data": data,
+            "data": _serialize(data),
             "timestamp": int(time.time()),
         }
     )
@@ -258,7 +279,7 @@ def fail_response(message_id, error):
         {
             "type": "error",
             "id": message_id,
-            "data": error,
+            "data": _serialize(error),
             "timestamp": int(time.time()),
         }
     )
@@ -281,9 +302,9 @@ def references_response(message_id, references, memory_count=0, urls=[]):
         {
             "type": "references",
             "id": message_id,
-            "data": references,
+            "data": _serialize(references),
             "memoryCount": memory_count,
-            "urls": urls,
+            "urls": _serialize(urls),
             "timestamp": int(time.time()),
         }
     )

@@ -18,6 +18,7 @@ Task data models for structured parameter passing and result handling
 
 from dataclasses import asdict, dataclass
 from enum import Enum
+import base64
 from typing import Any, Dict, List, Optional
 
 
@@ -81,6 +82,9 @@ class ParsedDocumentData:
                 for key, value in part.__dict__.items():
                     if isinstance(value, (str, int, float, bool, list, dict, type(None))):
                         part_dict[key] = value
+                    elif isinstance(value, bytes):
+                        # Serialize bytes to base64
+                        part_dict[key] = {"__type__": "bytes", "data": base64.b64encode(value).decode("utf-8")}
                     else:
                         # Convert non-serializable objects to string representation
                         part_dict[key] = str(value)
@@ -96,8 +100,20 @@ class ParsedDocumentData:
         # Create simple wrapper objects that mimic the original part behavior
         deserialized_parts = []
         for part_dict in serialized_parts:
+            # Pre-process dict to handle special types like bytes
+            processed_dict = {}
+            for k, v in part_dict.items():
+                if isinstance(v, dict) and v.get("__type__") == "bytes":
+                    try:
+                        processed_dict[k] = base64.b64decode(v["data"])
+                    except Exception:
+                        # Fallback if decoding fails
+                        processed_dict[k] = v
+                else:
+                    processed_dict[k] = v
+            
             # Create a simple object with attributes from the dict
-            part_obj = type("DocumentPart", (), part_dict)()
+            part_obj = type("DocumentPart", (), processed_dict)()
             deserialized_parts.append(part_obj)
         return deserialized_parts
 

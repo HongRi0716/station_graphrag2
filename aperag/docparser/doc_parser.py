@@ -159,7 +159,8 @@ class DocParser(BaseParser):
                 continue
             try:
                 return parser.parse_file(path, metadata, **kwargs)
-            except FallbackError as e:
+            except (FallbackError, Exception) as e:
+                logger.warning(f"Parser {parser_name} failed for file {path.name}: {e}")
                 last_err = e
         raise ValueError(
             f'No parser can handle file with extension "{extension}"') from last_err

@@ -824,6 +824,11 @@ class LightRAG:
             return {"nodes": [], "edges": []}
 
         # 1. Get global entities
+        # If query is empty, we need to use a general query to get all entities
+        if not query or query.strip() == "":
+            # Use a wildcard query or get all entities
+            query = "*"  # This will be handled by the storage layer
+        
         entities = await self.query_global(query, top_k)
         if not entities:
             return {"nodes": [], "edges": []}

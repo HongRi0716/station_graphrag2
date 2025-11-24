@@ -176,7 +176,7 @@ async def global_graph_search_view(
 
     # 1. Get any collection to initialize LightRAG (we need LLM config)
     # We try to find a collection with knowledge graph enabled
-    collections = await async_db_ops.query_collections(user, page=1, page_size=10)
+    collections = await async_db_ops.query_collections([str(user.id)])
     target_collection = None
     
     for col in collections:
@@ -189,7 +189,7 @@ async def global_graph_search_view(
         target_collection = collections[0]
         
     if not target_collection:
-        return {"entities": [], "message": "No collections found to initialize graph search"}
+        return {"nodes": [], "edges": [], "message": "No collections found to initialize graph search"}
 
     try:
         # 2. Initialize LightRAG
@@ -212,9 +212,8 @@ async def global_graph_hierarchy_view(
     top_k: int = Body(100, embed=True),
     user: User = Depends(required_user),
 ) -> Dict[str, Any]:
-    """Get hierarchical graph data showing Collection -> Document -> Entity relationships"""
-    from aperag.db.ops import async_db_ops, db_ops
-    from aperag.schema.utils import parseCollectionConfig
+    """Get hierarchical graph data showing Collection -> Document relationships"""
+    from aperag.db.ops import async_db_ops
 
     try:
         # 1. Get user's collections
@@ -243,7 +242,10 @@ async def global_graph_hierarchy_view(
             })
 
         # 2. Get documents for these collections
-        documents = await async_db_ops.query_documents_by_collection_ids(str(user.id), collection_ids)
+        documents = []
+        for collection_id in collection_ids:
+            collection_docs = await async_db_ops.query_documents([str(user.id)], collection_id)
+            documents.extend(collection_docs)
         
         document_id_to_collection = {}
         for doc in documents:
@@ -270,53 +272,30 @@ async def global_graph_hierarchy_view(
                 "label": "contains"
             })
 
-        # 3. Get entities with document information
-        # Use the new repository method to get entities with their document IDs
-        entity_results = db_ops.query_entities_with_document_info_global(
-            entity_names=None,  # Get all entities
-            top_k=top_k
-        )
+        # Add summary statistics
+        node_types = {}
+        for node in nodes:
+            node_type = node.get("type", "unknown")
+            node_types[node_type] = node_types.get(node_type, 0) + 1
         
-        # Filter entities: only include those whose documents belong to user's collections
-        user_doc_ids = {doc.id for doc in documents}
+        edge_types = {}
+        for edge in edges:
+            edge_type = edge.get("type", "unknown")
+            edge_types[edge_type] = edge_types.get(edge_type, 0) + 1
         
-        for entity_row in entity_results:
-            entity_id = entity_row.id
-            entity_name = entity_row.entity_name
-            workspace = entity_row.workspace
-            document_ids = entity_row.document_ids or []
-            
-            # Filter to only user's documents
-            relevant_doc_ids = [doc_id for doc_id in document_ids if doc_id in user_doc_ids]
-            
-            if not relevant_doc_ids:
-                continue  # Skip entities not in user's documents
-            
-            # Add Entity node
-            nodes.append({
-                "id": f"ent_{workspace}_{entity_id}",
-                "type": "entity",
-                "name": entity_name,
-                "metadata": {
-                    "entity_id": entity_id,
-                    "workspace": workspace,
-                    "content": entity_row.content or "",
-                    "created_at": int(entity_row.create_time.timestamp()) if entity_row.create_time else None
-                }
-            })
-            
-            # Add EXTRACTED_FROM edges: Document -> Entity
-            for doc_id in relevant_doc_ids:
-                edges.append({
-                    "source": f"doc_{doc_id}",
-                    "target": f"ent_{workspace}_{entity_id}",
-                    "type": "EXTRACTED_FROM",
-                    "label": "extracted"
-                })
-
+        logger.info(f"Global hierarchy graph: {len(nodes)} nodes, {len(edges)} edges")
+        logger.info(f"Node types: {node_types}")
+        logger.info(f"Edge types: {edge_types}")
+        
         return {
             "nodes": nodes,
-            "edges": edges
+            "edges": edges,
+            "statistics": {
+                "total_nodes": len(nodes),
+                "total_edges": len(edges),
+                "node_types": node_types,
+                "edge_types": edge_types
+            }
         }
         
     except Exception as e:

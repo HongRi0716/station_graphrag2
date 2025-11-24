@@ -47,30 +47,6 @@ class GraphService:
         finally:
             await rag.finalize_storages()
 
-    def _optimize_graph_for_visualization(self, nodes, edges, max_nodes):
-        """Optimize graph by selecting well-connected nodes"""
-        if len(nodes) <= max_nodes:
-            return nodes, edges
-
-        # Calculate node degrees
-        degree_map = {node.id: 0 for node in nodes}
-        for edge in edges:
-            if edge.source in degree_map and edge.target in degree_map:
-                degree_map[edge.source] += 1
-                degree_map[edge.target] += 1
-
-        # Select top nodes by degree
-        sorted_nodes = sorted(nodes, key=lambda node: (-degree_map[node.id], node.id))
-        selected_nodes = sorted_nodes[:max_nodes]
-        selected_node_ids = {node.id for node in selected_nodes}
-
-        # Filter edges between selected nodes
-        optimized_edges = [
-            edge for edge in edges if edge.source in selected_node_ids and edge.target in selected_node_ids
-        ]
-
-        return selected_nodes, optimized_edges
-
     async def get_knowledge_graph(
         self,
         user_id: str,
@@ -99,13 +75,8 @@ class GraphService:
                 max_nodes=query_max_nodes,
             )
 
-            # Optimize if needed
-            if (not label or label == "*") and len(kg.nodes) > max_nodes:
-                optimized_nodes, optimized_edges = self._optimize_graph_for_visualization(kg.nodes, kg.edges, max_nodes)
-                is_truncated = True
-            else:
-                optimized_nodes, optimized_edges = kg.nodes, kg.edges
-                is_truncated = getattr(kg, "is_truncated", False)
+            optimized_nodes, optimized_edges = kg.nodes, kg.edges
+            is_truncated = getattr(kg, "is_truncated", False)
 
             result = self._convert_graph_to_dict(optimized_nodes, optimized_edges, is_truncated)
 

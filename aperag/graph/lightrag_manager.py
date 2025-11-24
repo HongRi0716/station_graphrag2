@@ -145,7 +145,7 @@ def delete_document_for_celery(collection: Collection, doc_id: str) -> Dict[str,
 async def _enrich_content_with_vision_analysis(
     collection: Collection,
     doc_id: str,
-    max_wait_time: int | None = None,
+    max_wait_time: int | None = 3600,
     check_interval: int = 2,
 ) -> str:
     """

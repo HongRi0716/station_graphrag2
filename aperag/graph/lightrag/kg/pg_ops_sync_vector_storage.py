@@ -312,26 +312,19 @@ class PGOpsSyncVectorStorage(BaseVectorStorage):
 
     async def query_global(self, query: str, top_k: int) -> list[dict[str, Any]]:
         """Query vectors by similarity across ALL workspaces (Global Search)"""
-        # Compute embedding for query
-        embeddings = await self.embedding_func([query])
-        embedding = embeddings[0]
+        # Import here to avoid circular imports
+        from aperag.db.ops import db_ops
+        from aperag.graph.lightrag.namespace import NameSpace, is_namespace
 
-        def _sync_query_global():
-            # Import here to avoid circular imports
-            from aperag.db.ops import db_ops
-            from aperag.graph.lightrag.namespace import NameSpace, is_namespace
-
-            # Convert embedding to list if it's numpy array
-            if hasattr(embedding, "tolist"):
-                embedding_list = embedding.tolist()
-            else:
-                embedding_list = list(embedding)
-
-            if is_namespace(self.namespace, NameSpace.VECTOR_STORE_ENTITIES):
-                results = db_ops.query_lightrag_vdb_entity_similarity_global(
-                    embedding_list, top_k, self.cosine_better_than_threshold
-                )
-                # Convert results to expected format for entities
+        if not is_namespace(self.namespace, NameSpace.VECTOR_STORE_ENTITIES):
+            logger.warning(f"Global query not supported/implemented for namespace: {self.namespace}")
+            return []
+        
+        # If query is empty or wildcard, get all entities without similarity search
+        if not query or query.strip() == "" or query == "*":
+            def _sync_query_all():
+                results = db_ops.query_lightrag_vdb_entity_all_global(top_k)
+                # Convert results to expected format
                 formatted_results = []
                 for result in results:
                     if hasattr(result, "_asdict"):
@@ -345,15 +338,48 @@ class PGOpsSyncVectorStorage(BaseVectorStorage):
                         {
                             "entity_name": row_dict.get("entity_name"),
                             "created_at": row_dict.get("created_at"),
-                            "workspace": row_dict.get("workspace"),  # Include workspace for global search
+                            "workspace": row_dict.get("workspace"),
                         }
                     )
                 return formatted_results
+            
+            return await asyncio.to_thread(_sync_query_all)
+        else:
+            # Compute embedding for query
+            embeddings = await self.embedding_func([query])
+            embedding = embeddings[0]
+            
+            # Convert embedding to list if it's numpy array
+            if hasattr(embedding, "tolist"):
+                embedding_list = embedding.tolist()
             else:
-                logger.warning(f"Global query not supported/implemented for namespace: {self.namespace}")
-                return []
+                embedding_list = list(embedding)
+            
+            def _sync_query_similarity():
+                results = db_ops.query_lightrag_vdb_entity_similarity_global(
+                    embedding_list, top_k, self.cosine_better_than_threshold
+                )
+                
+                # Convert results to expected format
+                formatted_results = []
+                for result in results:
+                    if hasattr(result, "_asdict"):
+                        row_dict = result._asdict()
+                    elif isinstance(result, dict):
+                        row_dict = result
+                    else:
+                        row_dict = {key: getattr(result, key) for key in result.keys()}
 
-        return await asyncio.to_thread(_sync_query_global)
+                    formatted_results.append(
+                        {
+                            "entity_name": row_dict.get("entity_name"),
+                            "created_at": row_dict.get("created_at"),
+                            "workspace": row_dict.get("workspace"),
+                        }
+                    )
+                return formatted_results
+            
+            return await asyncio.to_thread(_sync_query_similarity)
 
     async def get_relations_for_entities_global(self, entity_names: list[str]) -> list[dict[str, Any]]:
         """Get relations for a list of entities across ALL workspaces"""

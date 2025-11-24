@@ -241,8 +241,8 @@ class Collection(BaseModel):
     config: Optional[CollectionConfig] = None
     source: Optional[CollectionSource] = None
     status: Optional[Literal['ACTIVE', 'INACTIVE', 'DELETED']] = None
-    created: Optional[datetime] = None
-    updated: Optional[datetime] = None
+    created: Optional[str] = None
+    updated: Optional[str] = None
     is_published: Optional[bool] = Field(
         False, description='Whether the collection is published to marketplace'
     )
@@ -464,8 +464,8 @@ class Bot(BaseModel):
         None, description='The type of bot', examples=['knowledge']
     )
     config: Optional[BotConfig] = None
-    created: Optional[datetime] = None
-    updated: Optional[datetime] = None
+    created: Optional[str] = None
+    updated: Optional[str] = None
 
 
 class PageResult(BaseModel):

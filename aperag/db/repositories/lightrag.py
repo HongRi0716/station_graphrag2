@@ -446,6 +446,29 @@ class LightragRepositoryMixin(SyncRepositoryProtocol):
             return [dict(row._mapping) for row in result]
 
         return self._execute_query(_query)
+    
+    def query_lightrag_vdb_entity_all_global(self, top_k: int = 100):
+        """Query all entities across ALL workspaces without similarity filtering"""
+
+        def _query(session):
+            from sqlalchemy import text
+
+            # Query all entities ordered by creation time
+            sql = text(
+                """
+                SELECT entity_name, workspace, EXTRACT(EPOCH FROM create_time)::BIGINT as created_at
+                FROM lightrag_vdb_entity
+                ORDER BY create_time DESC
+                LIMIT :top_k
+            """
+            )
+
+            result = session.execute(sql, {"top_k": top_k})
+
+            # Properly convert SQLAlchemy Row objects to dictionaries
+            return [dict(row._mapping) for row in result]
+
+        return self._execute_query(_query)
 
     def query_lightrag_vdb_relation_by_entity_names_global(self, entity_names: list):
         """Query relations where source or target is in entity_names across ALL workspaces"""
@@ -474,7 +497,7 @@ class LightragRepositoryMixin(SyncRepositoryProtocol):
 
         return self._execute_query(_query)
 
-    def query_entities_with_document_info_global(self, entity_names: list[str] = None, top_k: int = 100):
+    def query_entities_with_document_info_global(self, entity_names: list[str] = None, top_k: int = 100, workspaces: list[str] = None):
         """Query entities with their document information across all workspaces"""
 
         def _query(session):
@@ -496,6 +519,10 @@ class LightragRepositoryMixin(SyncRepositoryProtocol):
                 (LightRAGDocChunksModel.workspace == LightRAGVDBEntityModel.workspace) &
                 (LightRAGDocChunksModel.id == func.any(LightRAGVDBEntityModel.chunk_ids))
             )
+
+            # Filter by workspaces if provided
+            if workspaces:
+                query = query.where(LightRAGVDBEntityModel.workspace.in_(workspaces))
 
             # Filter by entity names if provided
             if entity_names:

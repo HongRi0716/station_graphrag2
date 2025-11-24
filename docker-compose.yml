@@ -34,6 +34,7 @@ services:
       - envs/docker.env.overrides
     environment:
       - DOCRAY_HOST=http://aperag-docray:8639
+      - JAEGER_ENDPOINT=http://aperag-jaeger:14268/api/traces
     ports:
       - "8000:8000"
     command: [ "/app/scripts/entrypoint.sh", "/app/scripts/start-api.sh" ]
@@ -88,6 +89,7 @@ services:
       - NODE_IP=aperag-celeryworker
       - DOCRAY_HOST=${DOCRAY_HOST}
       - APERAG_API_BASE_URL=http://aperag-api:8000
+      - JAEGER_ENDPOINT=http://aperag-jaeger:14268/api/traces
     command: [ "/app/scripts/entrypoint.sh", "/app/scripts/start-celery-worker.sh" ]
 
   celerybeat:
@@ -104,6 +106,7 @@ services:
         condition: service_healthy
     environment:
       - NODE_IP=aperag-celerybeat
+      - JAEGER_ENDPOINT=http://aperag-jaeger:14268/api/traces
     command: [ "/app/scripts/entrypoint.sh", "/app/scripts/start-celery-beat.sh" ]
 
   flower:
@@ -122,6 +125,7 @@ services:
       - "5555:5555"
     environment:
       - NODE_IP=aperag-flower
+      - JAEGER_ENDPOINT=http://aperag-jaeger:14268/api/traces
     command: [ "/app/scripts/entrypoint.sh", "/app/scripts/start-celery-flower.sh" ]
 
   # ==============================================

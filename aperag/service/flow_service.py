@@ -15,7 +15,8 @@
 import asyncio
 import json
 import logging
-from datetime import datetime
+from datetime import date, datetime
+from decimal import Decimal
 
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -40,14 +41,21 @@ class FlowService:
             self.db_ops = AsyncDatabaseOps(session)  # Create custom instance for transaction control
 
     def _convert_to_serializable(self, obj):
+        """Best-effort conversion of complex objects (datetime, Decimal, pydantic) to JSON-safe values."""
+        if obj is None:
+            return None
+        if isinstance(obj, (datetime, date)):
+            return obj.isoformat()
+        if isinstance(obj, Decimal):
+            return float(obj)
         if hasattr(obj, "model_dump"):
-            return obj.model_dump()
-        elif isinstance(obj, dict):
+            return self._convert_to_serializable(obj.model_dump())
+        if isinstance(obj, dict):
             return {k: self._convert_to_serializable(v) for k, v in obj.items()}
-        elif isinstance(obj, list):
+        if isinstance(obj, (list, tuple, set)):
             return [self._convert_to_serializable(item) for item in obj]
-        elif hasattr(obj, "__dict__"):
-            return self._convert_to_serializable(obj.__dict__)
+        if hasattr(obj, "__dict__"):
+            return self._convert_to_serializable(vars(obj))
         return obj
 
     async def stream_flow_events(self, flow_generator, flow_task, engine, flow):

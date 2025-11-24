@@ -15,6 +15,7 @@
 import functools
 import logging
 import time
+from datetime import date, datetime
 from typing import Any, Dict, Optional
 
 from fastapi import Request
@@ -66,6 +67,9 @@ def _clean_data_for_audit(data):
     """Clean data for audit logging - remove null values and sensitive information"""
     if data is None:
         return None
+
+    if isinstance(data, (datetime, date)):
+        return data.isoformat()
 
     if isinstance(data, dict):
         cleaned = {}

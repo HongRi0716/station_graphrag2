@@ -16,7 +16,9 @@ import base64
 import json
 import logging
 import uuid
-from typing import Dict, List, Optional, Tuple
+from datetime import date, datetime
+from decimal import Decimal
+from typing import Any, Dict, List, Optional, Tuple
 
 from litellm import BaseModel
 from pydantic import Field
@@ -46,6 +48,25 @@ FALLBACK_MAX_CONTEXT_LENGTH = 50000
 
 # Max images to feed to LLM
 MAX_IMAGES_PER_QUERY = 5
+
+
+def _make_json_serializable(value: Any):
+    """Recursively convert values (e.g. datetime, Decimal) into JSON-safe types."""
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
+    if isinstance(value, Decimal):
+        return float(value)
+    if isinstance(value, set):
+        return [_make_json_serializable(v) for v in value]
+    if isinstance(value, tuple):
+        return [_make_json_serializable(v) for v in value]
+    if isinstance(value, list):
+        return [_make_json_serializable(v) for v in value]
+    if isinstance(value, dict):
+        return {k: _make_json_serializable(v) for k, v in value.items()}
+    if hasattr(value, "model_dump"):
+        return _make_json_serializable(value.model_dump())
+    return value
 
 
 async def add_human_message(history: BaseChatMessageHistory, message, message_id):
@@ -302,7 +323,7 @@ class LLMService:
         )
 
         # Convert to plain dict objects
-        references = [ref.model_dump() for ref in references]
+        references = _make_json_serializable([ref.model_dump() for ref in references]) if references else []
 
         async def async_generator():
             response = ""

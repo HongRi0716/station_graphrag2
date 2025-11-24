@@ -116,7 +116,8 @@ class ChatService:
         if session is None:
             self.db_ops = async_db_ops  # Use global instance
         else:
-            self.db_ops = AsyncDatabaseOps(session)  # Create custom instance for transaction control
+            # Create custom instance for transaction control
+            self.db_ops = AsyncDatabaseOps(session)
 
     def build_chat_response(self, chat: db_models.Chat) -> view_models.Chat:
         """Build Chat response object for API return."""
@@ -243,7 +244,8 @@ class ChatService:
 
         if deleted_chat:
             # Clear chat history from Redis
-            history = RedisChatMessageHistory(chat_id, redis_client=get_async_redis_client())
+            history = RedisChatMessageHistory(
+                chat_id, redis_client=get_async_redis_client())
             await history.clear()
 
             return self.build_chat_response(deleted_chat)
@@ -290,6 +292,9 @@ class ChatService:
         if not bot:
             return FrontendFormatter.format_error("Bot not found")
 
+        formatter = FrontendFormatter()
+        bot_config = json.loads(bot.config or "{}")
+
         # Get or create chat session
         chat = await self.db_ops.query_chat_by_peer(bot.user, db_models.ChatPeerType.FEISHU, chat_id)
 
@@ -303,11 +308,56 @@ class ChatService:
                 peer_id=chat_id,
             )
 
-        # Use flow engine instead of MessageProcessor/pipeline
-        formatter = FrontendFormatter()
+        # Route agent bots through the AgentChatService
+        if bot.type == db_models.BotType.AGENT:
+            from aperag.service.agent_chat_service import AgentChatService
+
+            history = RedisChatMessageHistory(
+                chat_id, redis_client=get_async_redis_client())
+
+            try:
+                await history.add_user_message(message, msg_id, files=files)
+
+                agent_service = AgentChatService()
+                agent_id = (
+                    bot_config.get("agent_id")
+                    or bot_config.get("agentId")
+                    or bot_config.get("agent")
+                    or "supervisor"
+                )
+
+                result = await agent_service.chat(
+                    query=message,
+                    user_id=user,
+                    session_id=chat_id,
+                    agent_id=agent_id,
+                )
+
+                answer = result.get("answer") or ""
+                response_msg_id = msg_id or str(uuid.uuid4())
+                await history.add_ai_message(answer, response_msg_id)
+
+                if stream:
+
+                    async def single_chunk_generator():
+                        if answer:
+                            yield answer
+
+                    return StreamingResponse(
+                        self.stream_frontend_sse_response(
+                            single_chunk_generator(),
+                            formatter,
+                            response_msg_id,
+                        ),
+                        media_type="text/event-stream",
+                    )
+
+                return formatter.format_complete_response(response_msg_id, answer)
+            except Exception as e:
+                logger.exception("Agent execution failed via HTTP: %s", e)
+                return FrontendFormatter.format_error(str(e))
 
         # Get bot's flow configuration
-        bot_config = json.loads(bot.config or "{}")
         flow_config = bot_config.get("flow")
         if not flow_config:
             return FrontendFormatter.format_error("Bot flow config not found")
@@ -327,7 +377,8 @@ class ChatService:
             # Save user message to history with file metadata
             from aperag.utils.history import RedisChatMessageHistory, get_async_redis_client
 
-            history = RedisChatMessageHistory(chat_id, redis_client=get_async_redis_client())
+            history = RedisChatMessageHistory(
+                chat_id, redis_client=get_async_redis_client())
             await history.add_user_message(message, msg_id, files=files)
 
             # Execute flow
@@ -377,7 +428,8 @@ class ChatService:
     ) -> dict:
         """Handle message feedback for chat messages"""
         # Get message from Redis history to validate it exists and get context
-        history = RedisChatMessageHistory(chat_id, redis_client=get_async_redis_client())
+        history = RedisChatMessageHistory(
+            chat_id, redis_client=get_async_redis_client())
         ai_msg = None
         human_msg = None
         for message in await history.messages:
@@ -434,7 +486,8 @@ class ChatService:
                 return
 
             # Continue with existing flow for knowledge and common bots
-            history = RedisChatMessageHistory(chat_id, redis_client=get_async_redis_client())
+            history = RedisChatMessageHistory(
+                chat_id, redis_client=get_async_redis_client())
 
             while True:
                 # Receive message from client
@@ -498,7 +551,8 @@ class ChatService:
                     async_generator = None
                     nodes = engine.find_end_nodes(flow)
                     for node in nodes:
-                        async_generator = system_outputs[node].get("async_generator")
+                        async_generator = system_outputs[node].get(
+                            "async_generator")
                         if async_generator:
                             break
 
@@ -515,17 +569,21 @@ class ChatService:
                         # Handle special tokens for references and URLs (similar to original implementation)
                         if chunk.startswith(DOC_QA_REFERENCES):
                             try:
-                                references = json.loads(chunk[len(DOC_QA_REFERENCES) :])
+                                references = json.loads(
+                                    chunk[len(DOC_QA_REFERENCES):])
                                 continue
                             except Exception as e:
-                                logger.exception(f"Error parsing doc qa references: {chunk}, {e}")
+                                logger.exception(
+                                    f"Error parsing doc qa references: {chunk}, {e}")
 
                         if chunk.startswith(DOCUMENT_URLS):
                             try:
-                                urls = eval(chunk[len(DOCUMENT_URLS) :])  # Using eval as in original code
+                                # Using eval as in original code
+                                urls = eval(chunk[len(DOCUMENT_URLS):])
                                 continue
                             except Exception as e:
-                                logger.exception(f"Error parsing document urls: {chunk}, {e}")
+                                logger.exception(
+                                    f"Error parsing document urls: {chunk}, {e}")
 
                         # Send streaming response
                         await websocket.send_text(success_response(message_id, chunk))
@@ -537,11 +595,13 @@ class ChatService:
                     await websocket.send_text(stop_response(message_id))
 
                 except Exception as e:
-                    logger.exception(f"Error processing WebSocket message: {e}")
+                    logger.exception(
+                        f"Error processing WebSocket message: {e}")
                     await websocket.send_text(fail_response(message_id, str(e)))
 
         except WebSocketDisconnect:
-            logger.info(f"WebSocket disconnected for bot {bot_id}, chat {chat_id}")
+            logger.info(
+                f"WebSocket disconnected for bot {bot_id}, chat {chat_id}")
         except Exception as e:
             logger.exception(f"WebSocket error: {e}")
             try:
