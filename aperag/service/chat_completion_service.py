@@ -106,7 +106,8 @@ class ChatCompletionService:
         if session is None:
             self.db_ops = async_db_ops  # Use global instance
         else:
-            self.db_ops = AsyncDatabaseOps(session)  # Create custom instance for transaction control
+            # Create custom instance for transaction control
+            self.db_ops = AsyncDatabaseOps(session)
 
     async def stream_openai_sse_response(self, generator: AsyncGenerator[str, None], formatter, msg_id: str):
         """Stream SSE response for OpenAI API format"""

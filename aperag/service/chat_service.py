@@ -292,9 +292,6 @@ class ChatService:
         if not bot:
             return FrontendFormatter.format_error("Bot not found")
 
-        formatter = FrontendFormatter()
-        bot_config = json.loads(bot.config or "{}")
-
         # Get or create chat session
         chat = await self.db_ops.query_chat_by_peer(bot.user, db_models.ChatPeerType.FEISHU, chat_id)
 
@@ -308,56 +305,11 @@ class ChatService:
                 peer_id=chat_id,
             )
 
-        # Route agent bots through the AgentChatService
-        if bot.type == db_models.BotType.AGENT:
-            from aperag.service.agent_chat_service import AgentChatService
-
-            history = RedisChatMessageHistory(
-                chat_id, redis_client=get_async_redis_client())
-
-            try:
-                await history.add_user_message(message, msg_id, files=files)
-
-                agent_service = AgentChatService()
-                agent_id = (
-                    bot_config.get("agent_id")
-                    or bot_config.get("agentId")
-                    or bot_config.get("agent")
-                    or "supervisor"
-                )
-
-                result = await agent_service.chat(
-                    query=message,
-                    user_id=user,
-                    session_id=chat_id,
-                    agent_id=agent_id,
-                )
-
-                answer = result.get("answer") or ""
-                response_msg_id = msg_id or str(uuid.uuid4())
-                await history.add_ai_message(answer, response_msg_id)
-
-                if stream:
-
-                    async def single_chunk_generator():
-                        if answer:
-                            yield answer
-
-                    return StreamingResponse(
-                        self.stream_frontend_sse_response(
-                            single_chunk_generator(),
-                            formatter,
-                            response_msg_id,
-                        ),
-                        media_type="text/event-stream",
-                    )
-
-                return formatter.format_complete_response(response_msg_id, answer)
-            except Exception as e:
-                logger.exception("Agent execution failed via HTTP: %s", e)
-                return FrontendFormatter.format_error(str(e))
+        # Use flow engine instead of MessageProcessor/pipeline
+        formatter = FrontendFormatter()
 
         # Get bot's flow configuration
+        bot_config = json.loads(bot.config or "{}")
         flow_config = bot_config.get("flow")
         if not flow_config:
             return FrontendFormatter.format_error("Bot flow config not found")

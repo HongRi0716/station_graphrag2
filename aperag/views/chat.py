@@ -118,7 +118,8 @@ async def generate_chat_title_view(
         )
         return {"title": title}
     except BusinessException as be:
-        raise HTTPException(status_code=400, detail={"error_code": be.error_code.name, "message": str(be)})
+        raise HTTPException(status_code=400, detail={
+                            "error_code": be.error_code.name, "message": str(be)})
 
 
 @router.post("/chat/completions/frontend", tags=["chats"])
@@ -159,7 +160,8 @@ async def search_chat_files_view(
         # Get user's chat collection
         chat_collection_id = await chat_collection_service.get_user_chat_collection_id(str(user.id))
         if not chat_collection_id:
-            raise HTTPException(status_code=404, detail="Chat collection not found")
+            raise HTTPException(
+                status_code=404, detail="Chat collection not found")
 
         if not chat_id:
             raise HTTPException(status_code=400, detail="Chat ID is required")
