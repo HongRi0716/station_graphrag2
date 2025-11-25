@@ -21,7 +21,7 @@ from typing import List
 
 from fastapi import HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select
+from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from aperag.config import settings
@@ -1039,6 +1039,41 @@ class DocumentService:
 
         # Execute query with proper session management
         return await self.db_ops._execute_query(_get_document_preview)
+
+    async def get_recent_documents_by_collection(
+        self,
+        user_id: str,
+        collection_id: str,
+        limit: int = 10,
+    ) -> List[db_models.Document]:
+        """
+        Retrieve the most recent documents for a collection.
+
+        Args:
+            user_id: Owner of the collection.
+            collection_id: Target collection ID.
+            limit: Maximum number of documents to return (default 10).
+
+        Returns:
+            List of Document ORM objects sorted by update time (desc).
+        """
+
+        async def _query(session):
+            stmt = (
+                select(db_models.Document)
+                .where(
+                    db_models.Document.user == user_id,
+                    db_models.Document.collection_id == collection_id,
+                    db_models.Document.status != db_models.DocumentStatus.DELETED,
+                    db_models.Document.status != db_models.DocumentStatus.UPLOADED,
+                )
+                .order_by(desc(db_models.Document.gmt_updated), desc(db_models.Document.gmt_created))
+                .limit(limit)
+            )
+            result = await session.execute(stmt)
+            return result.scalars().all()
+
+        return await self.db_ops._execute_query(_query)
 
     async def get_document_object(
         self, user_id: str, collection_id: str, document_id: str, path: str, range_header: str = None

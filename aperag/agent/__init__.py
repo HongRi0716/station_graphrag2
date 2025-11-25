@@ -59,6 +59,7 @@ from .exceptions import (
     with_retry,
 )
 from .mcp_app_factory import MCPAppFactory
+from .registry import AgentMetadata, agent_registry
 from .response_types import (
     AgentChatResponse,
     AgentErrorResponse,
@@ -94,6 +95,9 @@ __all__ = [
     "agent_session_manager_lifespan",
     # MCP App Factory
     "MCPAppFactory",
+    # Agent registry
+    "AgentMetadata",
+    "agent_registry",
     # Stream formatters
     "format_i18n_error",
     "format_stream_content",

@@ -19,7 +19,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Literal, Optional, Union
+from typing import Any, List, Literal, Optional, Union
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, RootModel, confloat, conint
 
@@ -954,6 +954,61 @@ class GlobalEvidence(BaseModel):
     )
 
     model_config = ConfigDict(populate_by_name=True)
+
+
+class GraphHierarchyNode(BaseModel):
+    """
+    Lightweight node representation for hierarchy/overview graphs.
+    """
+
+    id: str = Field(..., description='Unique identifier for the node')
+    name: str = Field(..., description='Display name for the node')
+    type: str = Field(..., description='Node type, e.g., collection/document/entity')
+    label: Optional[str] = Field(
+        None, description='Optional short label shown in UI'
+    )
+    description: Optional[str] = Field(
+        None, description='Optional description for tooltips'
+    )
+    metadata: Optional[dict[str, Any]] = Field(
+        default=None, description='Arbitrary metadata for the node'
+    )
+    size: Optional[int] = Field(
+        default=None, description='Optional node size hint for visualization'
+    )
+
+
+class GraphHierarchyEdge(BaseModel):
+    """
+    Lightweight edge representation for hierarchy/overview graphs.
+    """
+
+    id: str = Field(..., description='Unique identifier for the edge')
+    source: str = Field(..., description='Source node ID')
+    target: str = Field(..., description='Target node ID')
+    type: str = Field(..., description='Edge type, e.g., CONTAINS')
+    label: Optional[str] = Field(
+        None, description='Optional label displayed on the edge'
+    )
+    metadata: Optional[dict[str, Any]] = Field(
+        default=None, description='Arbitrary metadata for the edge'
+    )
+
+
+class GraphData(BaseModel):
+    """
+    Complete graph payload for hierarchy explorer.
+    """
+
+    nodes: List[GraphHierarchyNode] = Field(
+        default_factory=list, description='Graph nodes'
+    )
+    edges: List[GraphHierarchyEdge] = Field(
+        default_factory=list, description='Graph edges'
+    )
+    statistics: Optional[dict[str, Any]] = Field(
+        default=None, description='Optional summary statistics'
+    )
 
 
 class SearchResult(BaseModel):

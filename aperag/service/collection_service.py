@@ -222,6 +222,14 @@ class CollectionService:
             items=paginated_items, pageResult=view_models.PageResult(total=len(items), page=page, page_size=page_size)
         )
 
+    async def get_all_collections(self, user_id: str) -> List[db_models.Collection]:
+        """
+        Return all non-deleted collections owned by the specified user.
+        """
+        if not user_id:
+            raise ValueError("user_id is required to fetch collections")
+        return await self.db_ops.query_collections([user_id])
+
     async def get_collection(self, user: str, collection_id: str) -> view_models.Collection:
         from aperag.exceptions import CollectionNotFoundException
 

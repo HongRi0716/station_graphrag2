@@ -42,12 +42,12 @@ class OperationTicketAgent(BaseAgent):
             return await self._general_guidance(state, query)
 
     async def _generate_operation_ticket(self, state: AgentState, query: str) -> Dict[str, Any]:
-        """生成操作票 (Mock)"""
+        """生成操作票 - 使用RAG检索和LLM生成"""
         self._log_thought(state, "plan", "开始智能生成操作票...")
 
-        # 解析操作任务
+        # 1. 解析操作任务
         operation_type = self._parse_operation_type(query)
-
+        
         self._log_thought(
             state,
             "action",
@@ -55,26 +55,96 @@ class OperationTicketAgent(BaseAgent):
             detail={"query": query, "type": operation_type}
         )
 
-        # Mock: 查询设备拓扑和状态
-        self._log_thought(
-            state,
-            "action",
-            "正在查询设备拓扑关系和当前运行状态...",
-            detail={"data_source": "知识图谱 + SCADA实时数据"}
+        # 2. 从知识库检索相关信息（如果有MCP会话）
+        historical_tickets = []
+        regulations = []
+        
+        if self.user_id:  # 只有设置了user_id才能使用MCP
+            try:
+                # 检索历史操作票案例
+                self._log_thought(
+                    state,
+                    "action",
+                    "正在检索历史操作票案例..."
+                )
+                
+                historical_results = await self._search_knowledge(
+                    state=state,
+                    query=f"{operation_type} 操作票案例",
+                    top_k=3
+                )
+                historical_tickets = self._extract_documents_from_tool_results(historical_results)
+                
+                # 检索操作规程
+                self._log_thought(
+                    state,
+                    "action",
+                    "正在检索操作规程和安全要求..."
+                )
+                
+                regulation_results = await self._search_knowledge(
+                    state=state,
+                    query=f"{operation_type} 操作规程 安全要求",
+                    top_k=3
+                )
+                regulations = self._extract_documents_from_tool_results(regulation_results)
+                
+            except Exception as e:
+                logger.warning(f"Knowledge search failed, using fallback: {e}")
+                self._log_thought(
+                    state,
+                    "observation",
+                    f"知识库检索失败，使用默认模板: {str(e)}"
+                )
+
+        # 3. 构建上下文
+        context = self._build_context_from_search_results(
+            historical_tickets,
+            regulations
         )
 
-        # 生成操作步骤
-        ticket = self._create_ticket_template(operation_type)
+        # 4. 使用LLM生成操作票数据（如果有MCP会话）
+        ticket_data = None
+        if self.user_id and context:
+            try:
+                prompt = self._build_generation_prompt(operation_type, query, context)
+                
+                generated_json = await self._generate_with_llm(
+                    state=state,
+                    prompt=prompt,
+                    temperature=0.5,
+                    max_tokens=4096
+                )
+                
+                # 解析生成的JSON
+                import json
+                ticket_data = json.loads(generated_json)
+                
+                self._log_thought(
+                    state,
+                    "observation",
+                    f"LLM生成了 {len(ticket_data.get('steps', []))} 步操作"
+                )
+                
+            except Exception as e:
+                logger.warning(f"LLM generation failed, using template: {e}")
+                self._log_thought(
+                    state,
+                    "observation",
+                    f"LLM生成失败，使用默认模板: {str(e)}"
+                )
+        
+        # 5. 如果LLM生成失败，使用默认模板
+        if not ticket_data:
+            ticket_data = self._create_ticket_template(operation_type)
+            self._log_thought(
+                state,
+                "observation",
+                "使用默认模板生成操作票"
+            )
 
-        self._log_thought(
-            state,
-            "observation",
-            f"已生成 {len(ticket['steps'])} 步操作",
-            detail=ticket
-        )
-
-        # 安全校验
-        safety_check = self._perform_safety_check(ticket)
+        # 6. 安全校验
+        safety_check = self._perform_safety_check(ticket_data)
         self._log_thought(
             state,
             "thought",
@@ -82,14 +152,130 @@ class OperationTicketAgent(BaseAgent):
             detail=safety_check
         )
 
-        # 格式化输出
-        report = self._format_operation_ticket(ticket, safety_check)
+        # 7. 使用模板渲染最终输出
+        try:
+            rendered_ticket = await self.render_with_template(
+                state=state,
+                template_name="operation_ticket.md",
+                context={
+                    "ticket_no": ticket_data.get("ticket_no", "OT-AUTO-001"),
+                    "title": ticket_data.get("title", query),
+                    "equipment": ticket_data.get("equipment", "未指定设备"),
+                    "voltage_level": ticket_data.get("voltage_level", "未指定"),
+                    "operation_date": ticket_data.get("operation_date", "待定"),
+                    "estimated_time": ticket_data.get("estimated_time", "待评估"),
+                    "operator": ticket_data.get("operator"),
+                    "supervisor": ticket_data.get("supervisor"),
+                    "prerequisites": ticket_data.get("prerequisites", []),
+                    "steps": ticket_data.get("steps", []),
+                    "safety_check": safety_check
+                }
+            )
+            
+            if rendered_ticket:
+                report = rendered_ticket
+            else:
+                # 模板渲染失败，使用格式化输出
+                report = self._format_operation_ticket(ticket_data, safety_check)
+                
+        except Exception as e:
+            logger.warning(f"Template rendering failed: {e}")
+            # 回退到格式化输出
+            report = self._format_operation_ticket(ticket_data, safety_check)
 
         return {
             "answer": report,
-            "ticket": ticket,
+            "ticket": ticket_data,
             "safety_check": safety_check
         }
+    
+    def _extract_documents_from_tool_results(self, tool_results: List[Dict]) -> List[Dict]:
+        """从工具调用结果中提取文档"""
+        documents = []
+        for result in tool_results:
+            if isinstance(result, dict) and "result" in result:
+                result_data = result["result"]
+                if isinstance(result_data, dict) and "documents" in result_data:
+                    documents.extend(result_data["documents"])
+        return documents
+    
+    def _build_context_from_search_results(
+        self,
+        historical_tickets: List[Dict],
+        regulations: List[Dict]
+    ) -> str:
+        """从检索结果构建上下文"""
+        if not historical_tickets and not regulations:
+            return ""
+        
+        context = "## 参考资料\n\n"
+        
+        if historical_tickets:
+            context += "### 历史操作票案例\n"
+            for i, ticket in enumerate(historical_tickets[:3]):
+                title = ticket.get('title', '未知')
+                content = ticket.get('content', '')[:300]
+                context += f"{i+1}. **{title}**\n"
+                context += f"   {content}...\n\n"
+        
+        if regulations:
+            context += "### 操作规程和安全要求\n"
+            for i, reg in enumerate(regulations[:3]):
+                title = reg.get('title', '未知')
+                content = reg.get('content', '')[:300]
+                context += f"{i+1}. **{title}**\n"
+                context += f"   {content}...\n\n"
+        
+        return context
+    
+    def _build_generation_prompt(
+        self,
+        operation_type: str,
+        query: str,
+        context: str
+    ) -> str:
+        """构建LLM生成提示词"""
+        prompt = f"""
+请根据以下信息生成一份标准的操作票数据（JSON格式）：
+
+**操作任务**: {query}
+**操作类型**: {operation_type}
+
+{context}
+
+请生成包含以下字段的JSON对象：
+{{
+    "ticket_no": "操作票编号（格式：OT-YYYY-MMDD-NNN）",
+    "title": "操作任务标题",
+    "equipment": "设备名称",
+    "voltage_level": "电压等级",
+    "operation_date": "计划操作日期",
+    "estimated_time": "预计用时",
+    "operator": "操作人（可选）",
+    "supervisor": "监护人（可选）",
+    "prerequisites": [
+        "操作前提条件1",
+        "操作前提条件2"
+    ],
+    "steps": [
+        {{
+            "seq": 1,
+            "action": "操作内容简述",
+            "detail": "详细操作说明",
+            "safety_note": "安全注意事项（可选）"
+        }}
+    ]
+}}
+
+要求：
+1. 步骤完整、顺序正确
+2. 符合《电力安全工作规程》
+3. 包含必要的安全措施
+4. 只输出JSON，不要其他说明文字
+
+JSON输出：
+"""
+        return prompt
 
     def _parse_operation_type(self, query: str) -> str:
         """解析操作类型"""

@@ -57,6 +57,11 @@ from aperag.views.settings import router as settings_router
 from aperag.views.web import router as web_router
 from aperag.views.preset_collections_admin import router as preset_collections_admin_router
 
+# Import agent API routers
+from aperag.api.routes.supervisor import router as supervisor_router
+from aperag.api.routes.archivist import router as archivist_router
+from aperag.api.routes.accident_deduction import router as accident_deduction_router
+
 # Initialize MCP server integration with stateless HTTP to fix OpenAI tool call sequence issues
 mcp_app = mcp_server.http_app(path="/", stateless_http=True)
 
@@ -66,6 +71,10 @@ async def combined_lifespan(app: FastAPI):
     """Combined lifespan manager for MCP and Agent sessions."""
     # Initialize the global proxy listener at startup
     await agent_event_listener.initialize()
+    
+    # Register all agents
+    from aperag.agent.register_agents import register_all_agents
+    register_all_agents()
 
     # Start MCP server first
     async with mcp_app.lifespan(app):
@@ -116,6 +125,11 @@ app.include_router(chat_router, prefix="/api/v1")
 app.include_router(openai_router, prefix="/v1")
 app.include_router(config_router, prefix="/api/v1/config")
 app.include_router(preset_collections_admin_router, prefix="/api/v1")  # Add preset collections admin router
+
+# Register agent API routers
+app.include_router(supervisor_router)  # Already has /api/v1/agents/supervisor prefix
+app.include_router(archivist_router)  # Already has /api/v1/agents/archivist prefix
+app.include_router(accident_deduction_router)  # Already has /api/v1/agents/accident-deduction prefix
 
 # Only include test router in dev mode
 if os.environ.get("DEPLOYMENT_MODE") == "dev":

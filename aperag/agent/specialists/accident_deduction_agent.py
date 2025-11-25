@@ -44,12 +44,12 @@ class AccidentDeductionAgent(BaseAgent):
             return await self._general_guidance(state, query)
 
     async def _generate_accident_deduction(self, state: AgentState, query: str) -> Dict[str, Any]:
-        """生成事故预想报告 (Mock)"""
+        """生成事故预想报告 - 使用RAG检索和LLM生成"""
         self._log_thought(state, "plan", "开始编制事故预想报告...")
 
-        # 识别设备和场景
+        # 1. 识别设备和场景
         equipment, scenario = self._parse_accident_scenario(query)
-
+        
         self._log_thought(
             state,
             "action",
@@ -57,31 +57,265 @@ class AccidentDeductionAgent(BaseAgent):
             detail={"equipment": equipment, "scenario": scenario}
         )
 
-        # 查询历史案例
-        self._log_thought(
-            state,
-            "action",
-            "检索相关历史事故案例...",
-            detail={"data_source": "事故案例库"}
+        # 2. 从知识库检索历史事故案例（如果有MCP会话）
+        historical_cases = []
+        similar_accidents = []
+        
+        if self.user_id:
+            try:
+                # 检索历史事故案例
+                self._log_thought(
+                    state,
+                    "action",
+                    "正在检索历史事故案例..."
+                )
+                
+                case_results = await self._search_knowledge(
+                    state=state,
+                    query=f"{equipment} {scenario} 事故案例",
+                    top_k=5
+                )
+                historical_cases = self._extract_documents_from_tool_results(case_results)
+                
+                # 检索类似事故处置经验
+                self._log_thought(
+                    state,
+                    "action",
+                    "正在检索事故处置经验..."
+                )
+                
+                experience_results = await self._search_knowledge(
+                    state=state,
+                    query=f"{scenario} 应急处置 处理流程",
+                    top_k=3
+                )
+                similar_accidents = self._extract_documents_from_tool_results(experience_results)
+                
+            except Exception as e:
+                logger.warning(f"Knowledge search failed, using fallback: {e}")
+                self._log_thought(
+                    state,
+                    "observation",
+                    f"知识库检索失败，使用默认模板: {str(e)}"
+                )
+
+        # 3. 构建上下文
+        context = self._build_deduction_context(
+            historical_cases,
+            similar_accidents
         )
 
-        # 生成事故预想
-        deduction = self._create_accident_deduction(equipment, scenario)
+        # 4. 使用LLM生成事故推演（如果有MCP会话）
+        deduction_data = None
+        if self.user_id and context:
+            try:
+                prompt = self._build_deduction_prompt(equipment, scenario, query, context)
+                
+                generated_json = await self._generate_with_llm(
+                    state=state,
+                    prompt=prompt,
+                    temperature=0.4,
+                    max_tokens=6000
+                )
+                
+                # 解析生成的JSON
+                import json
+                deduction_data = json.loads(generated_json)
+                
+                self._log_thought(
+                    state,
+                    "observation",
+                    f"LLM生成了事故推演，包含 {len(deduction_data.get('possible_causes', []))} 种可能原因"
+                )
+                
+            except Exception as e:
+                logger.warning(f"LLM generation failed, using template: {e}")
+                self._log_thought(
+                    state,
+                    "observation",
+                    f"LLM生成失败，使用默认模板: {str(e)}"
+                )
+        
+        # 5. 如果LLM生成失败，使用默认模板
+        if not deduction_data:
+            deduction_data = self._create_accident_deduction(equipment, scenario)
+            self._log_thought(
+                state,
+                "observation",
+                "使用默认模板生成事故预想"
+            )
 
-        self._log_thought(
-            state,
-            "observation",
-            f"已生成事故预想，包含 {len(deduction['possible_faults'])} 种可能故障",
-            detail=deduction
-        )
-
-        # 格式化输出
-        report = self._format_accident_deduction(deduction)
+        # 6. 使用模板渲染最终输出
+        try:
+            rendered_report = await self.render_with_template(
+                state=state,
+                template_name="accident_deduction_report.md",
+                context={
+                    "report_no": deduction_data.get("report_no", "AD-AUTO-001"),
+                    "deduction_date": deduction_data.get("deduction_date", "待定"),
+                    "deductor": deduction_data.get("deductor"),
+                    "reviewer": deduction_data.get("reviewer"),
+                    "fault_equipment": equipment,
+                    "fault_type": scenario,
+                    "fault_time": deduction_data.get("fault_time", "假设时间"),
+                    "initial_phenomenon": deduction_data.get("initial_phenomenon", "待描述"),
+                    "operation_mode": deduction_data.get("operation_mode", "正常运行方式"),
+                    "system_status": deduction_data.get("system_status", []),
+                    "fault_chain": deduction_data.get("fault_chain", []),
+                    "deduction_steps": deduction_data.get("deduction_steps", []),
+                    "outage_scope": deduction_data.get("outage_scope", []),
+                    "equipment_impact": deduction_data.get("equipment_impact", []),
+                    "accident_level": deduction_data.get("accident_level", "待评估"),
+                    "severity_criteria": deduction_data.get("severity_criteria", []),
+                    "immediate_actions": deduction_data.get("immediate_actions", []),
+                    "isolation_steps": deduction_data.get("isolation_steps", []),
+                    "recovery_plan": deduction_data.get("recovery_plan", []),
+                    "emergency_resources": deduction_data.get("emergency_resources", []),
+                    "technical_measures": deduction_data.get("technical_measures", []),
+                    "management_measures": deduction_data.get("management_measures", []),
+                    "similar_cases": historical_cases[:3] if historical_cases else [],
+                    "insights": deduction_data.get("insights", []),
+                    "conclusion": deduction_data.get("conclusion", "待总结")
+                }
+            )
+            
+            if rendered_report:
+                report = rendered_report
+            else:
+                # 模板渲染失败，使用格式化输出
+                report = self._format_accident_deduction(deduction_data)
+                
+        except Exception as e:
+            logger.warning(f"Template rendering failed: {e}")
+            # 回退到格式化输出
+            report = self._format_accident_deduction(deduction_data)
 
         return {
             "answer": report,
-            "deduction": deduction
+            "deduction": deduction_data
         }
+    
+    def _extract_documents_from_tool_results(self, tool_results: List[Dict]) -> List[Dict]:
+        """从工具调用结果中提取文档"""
+        documents = []
+        for result in tool_results:
+            if isinstance(result, dict) and "result" in result:
+                result_data = result["result"]
+                if isinstance(result_data, dict) and "documents" in result_data:
+                    documents.extend(result_data["documents"])
+        return documents
+    
+    def _build_deduction_context(
+        self,
+        historical_cases: List[Dict],
+        similar_accidents: List[Dict]
+    ) -> str:
+        """从检索结果构建上下文"""
+        if not historical_cases and not similar_accidents:
+            return ""
+        
+        context = "## 参考资料\n\n"
+        
+        if historical_cases:
+            context += "### 历史事故案例\n"
+            for i, case in enumerate(historical_cases[:5]):
+                title = case.get('title', '未知')
+                content = case.get('content', '')[:400]
+                context += f"{i+1}. **{title}**\n"
+                context += f"   {content}...\n\n"
+        
+        if similar_accidents:
+            context += "### 事故处置经验\n"
+            for i, exp in enumerate(similar_accidents[:3]):
+                title = exp.get('title', '未知')
+                content = exp.get('content', '')[:400]
+                context += f"{i+1}. **{title}**\n"
+                context += f"   {content}...\n\n"
+        
+        return context
+    
+    def _build_deduction_prompt(
+        self,
+        equipment: str,
+        scenario: str,
+        query: str,
+        context: str
+    ) -> str:
+        """构建LLM生成提示词"""
+        prompt = f"""
+请根据以下信息生成一份详细的事故推演报告数据（JSON格式）：
+
+**设备**: {equipment}
+**事故场景**: {scenario}
+**任务**: {query}
+
+{context}
+
+请生成包含以下字段的JSON对象：
+{{
+    "report_no": "推演报告编号（格式：AD-YYYY-MMDD-NNN）",
+    "deduction_date": "推演日期",
+    "fault_time": "假设故障发生时间",
+    "initial_phenomenon": "初始故障现象描述",
+    "operation_mode": "系统运行方式",
+    "deduction_steps": [
+        {{
+            "title": "推演步骤标题",
+            "time": "相对时间（如T+0分钟）",
+            "event": "发生的事件",
+            "impact": "影响范围",
+            "protection": "保护动作情况",
+            "details": "详细说明"
+        }}
+    ],
+    "outage_scope": [
+        {{
+            "area": "停电区域/设备",
+            "voltage": "电压等级",
+            "capacity": "负荷容量",
+            "users": "影响用户"
+        }}
+    ],
+    "immediate_actions": [
+        {{
+            "title": "应急措施标题",
+            "executor": "执行人",
+            "deadline": "时限",
+            "content": "具体内容"
+        }}
+    ],
+    "isolation_steps": [
+        {{
+            "action": "隔离操作",
+            "equipment": "操作设备",
+            "detail": "操作内容",
+            "safety_note": "安全注意"
+        }}
+    ],
+    "recovery_plan": [
+        {{
+            "stage": "恢复阶段",
+            "scope": "恢复范围",
+            "steps": "操作步骤",
+            "estimated_time": "预计时间"
+        }}
+    ],
+    "insights": [
+        "推演启示1",
+        "推演启示2"
+    ],
+    "conclusion": "推演结论总结"
+}}
+
+要求：
+1. 推演逻辑清晰，符合电力系统故障传播规律
+2. 应急措施具体可行
+3. 参考历史案例经验
+4. 只输出JSON，不要其他说明文字
+
+JSON输出：
+"""
+        return prompt
 
     def _parse_accident_scenario(self, query: str) -> tuple:
         """解析事故场景"""

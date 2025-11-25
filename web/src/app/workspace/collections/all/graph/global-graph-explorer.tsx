@@ -12,7 +12,14 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import * as d3 from 'd3';
-import { ExternalLink, Loader2, Search, X } from 'lucide-react';
+import {
+  ExternalLink,
+  FileText,
+  Folder,
+  Loader2,
+  Network,
+  RotateCcw,
+} from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useTheme } from 'next-themes';
 import dynamic from 'next/dynamic';
@@ -26,12 +33,19 @@ const ForceGraph2D = dynamic(
   },
 );
 
+type NodeMetadata = {
+  collection_id?: string | number;
+  document_id?: string | number;
+  description?: string;
+  [key: string]: unknown;
+};
+
 interface GraphNode {
   id: string;
   type: 'collection' | 'document' | 'entity';
   name: string;
   description?: string;
-  metadata?: Record<string, unknown>;
+  metadata?: NodeMetadata;
   workspace?: string;
   entity_name?: string;
   val?: number;
@@ -53,6 +67,14 @@ const getNodeId = (nodeRef: string | { id: string }) => {
   return typeof nodeRef === 'object' ? nodeRef.id : nodeRef;
 };
 
+const getMetadataValue = (node: GraphNode, key: keyof NodeMetadata) => {
+  const value = node.metadata?.[key];
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  return String(value);
+};
+
 export function GlobalGraphExplorer() {
   const t = useTranslations('page_graph');
   const { resolvedTheme } = useTheme();
@@ -68,7 +90,6 @@ export function GlobalGraphExplorer() {
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
   const [nodeDetailOpen, setNodeDetailOpen] = useState(false);
-  const [showStats, setShowStats] = useState(true);
   const [hoveredNode, setHoveredNode] = useState<GraphNode | null>(null);
   const [highlightNodes, setHighlightNodes] = useState(new Set<string>());
   const [highlightLinks, setHighlightLinks] = useState(new Set<string>());
@@ -77,6 +98,7 @@ export function GlobalGraphExplorer() {
   const containerRef = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const graphRef = useRef<any>(null);
+  const hierarchicalView = true;
 
   const nodeTypeColors = useMemo(
     () => ({
@@ -109,7 +131,7 @@ export function GlobalGraphExplorer() {
   }, [handleResize]);
 
   // Define data loading function for reuse
-  const fetchHierarchyData = useCallback(async () => {
+  const fetchHierarchyData = useCallback(async (searchTerm = '') => {
     setLoading(true);
     setHasSearched(true);
 
@@ -120,8 +142,8 @@ export function GlobalGraphExplorer() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          query: '',
-          top_k: 50,
+          query: searchTerm.trim(),
+          top_k: 100,
         }),
       });
 
@@ -138,6 +160,9 @@ export function GlobalGraphExplorer() {
         // Calculate node values and reset coordinates for DAG layout
         nodes.forEach((node: GraphNode) => {
           if (!node.type) node.type = 'entity';
+          if (!node.description && node.metadata?.description) {
+            node.description = String(node.metadata.description);
+          }
 
           delete node.x;
           delete node.y;
@@ -158,13 +183,11 @@ export function GlobalGraphExplorer() {
 
         setGraphData({ nodes, links });
 
-        const expandableIds = nodes
-          .filter(
-            (n: GraphNode) => n.type === 'collection' || n.type === 'document',
-          )
+        const collectionIds = nodes
+          .filter((n: GraphNode) => n.type === 'collection')
           .map((n: GraphNode) => n.id);
-        setExpandedNodes(new Set(expandableIds));
-        console.log(`✓ Auto-expanded ${expandableIds.length} nodes`);
+        setExpandedNodes(new Set(collectionIds));
+        console.log(`✓ Auto-expanded ${collectionIds.length} collections`);
 
         if (graphRef.current) {
           graphRef.current.d3ReheatSimulation();
@@ -188,73 +211,7 @@ export function GlobalGraphExplorer() {
   }, [fetchHierarchyData]);
 
   const handleSearch = async () => {
-    setLoading(true);
-    setHasSearched(true);
-
-    try {
-      const response = await fetch('/api/v1/graphs/hierarchy/global', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          query: query || '',
-          top_k: 50,
-        }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        console.log('Graph data received:', {
-          nodeCount: data.nodes?.length || 0,
-          edgeCount: data.edges?.length || 0,
-          statistics: data.statistics,
-        });
-
-        const nodes = data.nodes || [];
-        const links = data.edges || [];
-
-        nodes.forEach((node: GraphNode) => {
-          if (!node.type) {
-            console.warn('Node without type in hierarchy:', node);
-            node.type = 'entity';
-          }
-        });
-
-        nodes.forEach((node: GraphNode) => {
-          const degree = links.filter((l: GraphEdge) => {
-            const sourceId =
-              typeof l.source === 'object' ? l.source.id : l.source;
-            const targetId =
-              typeof l.target === 'object' ? l.target.id : l.target;
-            return sourceId === node.id || targetId === node.id;
-          }).length;
-          node.val = Math.max(degree, 5);
-        });
-
-        setGraphData({ nodes, links });
-
-        const collectionIds = nodes
-          .filter((n: GraphNode) => n.type === 'collection')
-          .map((n: GraphNode) => n.id);
-        setExpandedNodes(new Set(collectionIds));
-
-        setTimeout(() => {
-          if (graphRef.current) {
-            graphRef.current.zoomToFit(400);
-          }
-        }, 500);
-      } else {
-        const errorText = await response.text();
-        console.error('Search failed:', response.status, errorText);
-        setGraphData({ nodes: [], links: [] });
-      }
-    } catch (error) {
-      console.error('Search error:', error);
-      setGraphData({ nodes: [], links: [] });
-    } finally {
-      setLoading(false);
-    }
+    await fetchHierarchyData(query);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -264,21 +221,25 @@ export function GlobalGraphExplorer() {
   };
 
   // Helper function to navigate to knowledge graph
-  const navigateToGraph = (node: any) => {
+  const navigateToGraph = (node: GraphNode) => {
     if (node.type === 'collection') {
-      // Extract collection ID from node.id (format: "col_<id>")
-      const collectionId =
-        node.metadata?.collection_id || node.id.replace('col_', '');
-      router.push(`/workspace/collections/${collectionId}/graph`);
-    } else if (node.type === 'document') {
-      // Extract collection and document IDs
-      const collectionId = node.metadata?.collection_id;
-      const documentId = node.metadata?.document_id;
-      if (collectionId && documentId) {
-        // Navigate to collection graph with document filter
-        router.push(
-          `/workspace/collections/${collectionId}/graph?doc=${documentId}`,
-        );
+      const metadataId = getMetadataValue(node, 'collection_id');
+      const fallback = node.id.replace(/^col_/, '');
+      const collectionId = metadataId || fallback;
+      if (collectionId) {
+        router.push(`/workspace/collections/${collectionId}/graph`);
+      }
+      return;
+    }
+
+    if (node.type === 'document') {
+      const collectionId = getMetadataValue(node, 'collection_id');
+      const documentId = getMetadataValue(node, 'document_id');
+      if (collectionId) {
+        const targetUrl = documentId
+          ? `/workspace/collections/${collectionId}/graph?doc=${documentId}`
+          : `/workspace/collections/${collectionId}/graph`;
+        router.push(targetUrl);
       }
     }
   };
@@ -287,7 +248,7 @@ export function GlobalGraphExplorer() {
   const handleNodeClick = (node: any) => {
     const currentTime = Date.now();
     const isDoubleClick =
-      lastClickedNode === node.id && currentTime - lastClickTime < 300; // 300ms for double click
+      lastClickedNode === node.id && currentTime - lastClickTime < 500;
 
     setLastClickTime(currentTime);
     setLastClickedNode(node.id);
@@ -301,20 +262,22 @@ export function GlobalGraphExplorer() {
 
     if (node.type === 'collection' || node.type === 'document') {
       setExpandedNodes((prev) => {
-        const newSet = new Set(prev);
-        if (newSet.has(node.id)) {
-          newSet.delete(node.id);
+        const updated = new Set(prev);
+        if (updated.has(node.id)) {
+          updated.delete(node.id);
         } else {
-          newSet.add(node.id);
+          updated.add(node.id);
         }
-        return newSet;
+        return updated;
       });
-    } else {
-      setSelectedNode(node);
-      setNodeDetailOpen(true);
-      graphRef.current?.centerAt(node.x, node.y, 1000);
-      graphRef.current?.zoom(8, 2000);
     }
+
+    setSelectedNode(node);
+    setNodeDetailOpen(true);
+    const targetX = node.x ?? 0;
+    const targetY = node.y ?? 0;
+    graphRef.current?.centerAt(targetX, targetY, 800);
+    graphRef.current?.zoom(5, 1000);
   };
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -408,44 +371,35 @@ export function GlobalGraphExplorer() {
       | d3.ForceManyBody<GraphNode>
       | undefined;
     if (chargeForce) {
-      chargeForce.strength(-500);
+      chargeForce.strength(-320);
     }
 
     const linkForce = graphRef.current.d3Force?.('link') as
       | d3.ForceLink<GraphNode, GraphEdge>
       | undefined;
     if (linkForce) {
-      linkForce.distance(50);
+      linkForce.distance((link) =>
+        link.type === 'CONTAINS' ? 80 : link.type === 'EXTRACTED_FROM' ? 60 : 40,
+      );
     }
 
     graphRef.current.d3ReheatSimulation?.();
   }, [filteredGraphData.nodes.length, filteredGraphData.links.length]);
 
-  const stats = useMemo(() => {
-    const { nodes, links } = filteredGraphData;
-    const typeCounts = nodes.reduce(
-      (acc, node) => {
-        acc[node.type] = (acc[node.type] || 0) + 1;
-        return acc;
-      },
-      {} as Record<string, number>,
-    );
+  const metadataDescription =
+    typeof selectedNode?.metadata?.description === 'string'
+      ? (selectedNode?.metadata?.description as string)
+      : undefined;
+  const selectedDescription =
+    selectedNode?.description || metadataDescription;
 
-    const linkTypeCounts = links.reduce(
-      (acc, link) => {
-        acc[link.type] = (acc[link.type] || 0) + 1;
-        return acc;
-      },
-      {} as Record<string, number>,
-    );
-
-    return {
-      totalNodes: nodes.length,
-      totalLinks: links.length,
-      typeCounts,
-      linkTypeCounts,
-    };
-  }, [filteredGraphData]);
+  const selectedMetadataEntries =
+    selectedNode?.metadata
+      ? Object.entries(selectedNode.metadata).filter(
+        ([, value]) =>
+          ['string', 'number', 'boolean'].includes(typeof value),
+      )
+      : [];
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const getNodeColor = (node: any) => {
@@ -461,40 +415,30 @@ export function GlobalGraphExplorer() {
             <Input
               type="text"
               placeholder={
-                t('search_placeholder') || 'Search global entities...'
+                t('search_placeholder') ||
+                'Filter collections, documents or entities...'
               }
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={handleKeyDown}
               className="flex-1"
             />
-            <Button onClick={handleSearch} disabled={loading} size="sm">
+            <Button
+              onClick={handleSearch}
+              disabled={loading}
+              size="sm"
+              variant="secondary"
+              title="Refresh directory view"
+            >
               {loading ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
-                <Search className="h-4 w-4" />
+                <RotateCcw className="h-4 w-4" />
               )}
-              <span className="ml-1">Search</span>
+              <span className="ml-1">Reload</span>
             </Button>
           </div>
-          {hasSearched && (
-            <div className="text-muted-foreground flex flex-col gap-1 text-xs">
-              <div className="flex items-start gap-1">
-                <span>💡</span>
-                <span>
-                  <strong>Hierarchy:</strong> Collection (□) → Document (△) →
-                  Entity (●)
-                </span>
-              </div>
-              <div className="pl-5 text-xs">
-                • Single click: expand/collapse nodes
-              </div>
-              <div className="pl-5 text-xs">
-                • Double click: open detailed knowledge graph
-              </div>
-              <div className="pl-5 text-xs">• Hover: highlight connections</div>
-            </div>
-          )}
+
           {hasSearched && filteredGraphData.nodes.length > 200 && (
             <div className="flex items-start gap-1 text-xs text-yellow-600 dark:text-yellow-500">
               <span>⚠️</span>
@@ -507,141 +451,7 @@ export function GlobalGraphExplorer() {
         </Card>
       </div>
 
-      {hasSearched && filteredGraphData.nodes.length > 0 && (
-        <div className="absolute top-32 left-4 z-10 flex flex-col gap-2">
-          <Card className="bg-background/95 max-w-xs p-3 shadow-lg backdrop-blur-sm">
-            <div className="text-muted-foreground mb-2 text-xs font-bold tracking-wide uppercase">
-              Node Types
-            </div>
-            <div className="flex flex-col gap-2">
-              <div className="hover:bg-muted/50 flex items-center gap-2 rounded p-1">
-                <div
-                  className="h-4 w-4 rounded-sm border border-gray-300"
-                  style={{ backgroundColor: nodeTypeColors.collection }}
-                ></div>
-                <span className="text-xs font-medium">Collection</span>
-                <span className="text-muted-foreground ml-auto text-xs">□</span>
-              </div>
-              <div className="hover:bg-muted/50 flex items-center gap-2 rounded p-1">
-                <div
-                  className="h-4 w-4 border border-gray-300"
-                  style={{
-                    backgroundColor: nodeTypeColors.document,
-                    clipPath: 'polygon(50% 0%, 100% 100%, 0% 100%)',
-                  }}
-                ></div>
-                <span className="text-xs font-medium">Document</span>
-                <span className="text-muted-foreground ml-auto text-xs">△</span>
-              </div>
-              <div className="hover:bg-muted/50 flex items-center gap-2 rounded p-1">
-                <div
-                  className="h-4 w-4 rounded-full border border-gray-300"
-                  style={{ backgroundColor: nodeTypeColors.entity }}
-                ></div>
-                <span className="text-xs font-medium">Entity</span>
-                <span className="text-muted-foreground ml-auto text-xs">●</span>
-              </div>
-            </div>
-          </Card>
 
-          {showStats && (
-            <Card className="bg-background/95 max-w-xs p-3 shadow-lg backdrop-blur-sm">
-              <div className="mb-2 flex items-center justify-between">
-                <div className="text-muted-foreground text-xs font-bold tracking-wide uppercase">
-                  Statistics
-                </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="hover:bg-destructive/10 h-6 w-6 p-0"
-                  onClick={() => setShowStats(false)}
-                  title="Hide statistics"
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-              <div className="flex flex-col gap-1 text-xs">
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Total Nodes:</span>
-                  <span className="font-bold">{stats.totalNodes}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Total Links:</span>
-                  <span className="font-bold">{stats.totalLinks}</span>
-                </div>
-
-                {stats.totalNodes > 0 && (
-                  <>
-                    <div className="my-1 border-t"></div>
-                    <div className="text-muted-foreground mb-1 text-xs font-semibold">
-                      Node Types:
-                    </div>
-                    {Object.entries(stats.typeCounts)
-                      .filter(
-                        ([type]) => type !== 'undefined' && type !== 'unknown',
-                      )
-                      .map(([type, count]) => (
-                        <div
-                          key={type}
-                          className="flex items-center justify-between gap-2 pl-2"
-                        >
-                          <div className="flex items-center gap-2">
-                            <div
-                              className="h-3 w-3 rounded-sm"
-                              style={{
-                                backgroundColor:
-                                  nodeTypeColors[
-                                    type as keyof typeof nodeTypeColors
-                                  ] || '#999',
-                              }}
-                            ></div>
-                            <span className="capitalize">
-                              {type === 'collection'
-                                ? 'Collections'
-                                : type === 'document'
-                                  ? 'Documents'
-                                  : type === 'entity'
-                                    ? 'Entities'
-                                    : type}
-                            </span>
-                          </div>
-                          <span className="font-medium">{count}</span>
-                        </div>
-                      ))}
-                  </>
-                )}
-
-                {hoveredNode && (
-                  <>
-                    <div className="my-2 border-t"></div>
-                    <div className="bg-primary/10 rounded p-2">
-                      <div className="mb-1 text-xs font-bold">
-                        Selected Node:
-                      </div>
-                      <div
-                        className="mb-1 truncate font-medium"
-                        title={hoveredNode.name || hoveredNode.entity_name}
-                      >
-                        {hoveredNode.name || hoveredNode.entity_name}
-                      </div>
-                      <div className="text-muted-foreground flex items-center justify-between">
-                        <span>Type:</span>
-                        <span className="capitalize">{hoveredNode.type}</span>
-                      </div>
-                      <div className="text-muted-foreground mt-1 flex items-center justify-between border-t pt-1">
-                        <span>Connections:</span>
-                        <span className="font-medium">
-                          {highlightNodes.size - 1}
-                        </span>
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
-            </Card>
-          )}
-        </div>
-      )}
 
       {/* Graph Container */}
       <div
@@ -701,11 +511,11 @@ export function GlobalGraphExplorer() {
               // eslint-disable-line @typescript-eslint/no-explicit-any
               const baseSize =
                 node.type === 'collection'
-                  ? 12
+                  ? 14
                   : node.type === 'document'
-                    ? 8
+                    ? 10
                     : 6;
-              return hoveredNode?.id === node.id ? baseSize * 1.5 : baseSize;
+              return hoveredNode?.id === node.id ? baseSize * 1.3 : baseSize;
             }}
             linkColor={(link: any) => {
               // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -755,8 +565,8 @@ export function GlobalGraphExplorer() {
             backgroundColor={resolvedTheme === 'dark' ? '#020817' : '#ffffff'}
             onNodeClick={handleNodeClick}
             onNodeHover={handleNodeHover}
-            dagMode="td"
-            dagLevelDistance={120}
+            dagMode={hierarchicalView ? 'td' : undefined}
+            dagLevelDistance={hierarchicalView ? 120 : undefined}
             cooldownTicks={100}
             d3AlphaDecay={0.01}
             d3VelocityDecay={0.3}
@@ -764,134 +574,98 @@ export function GlobalGraphExplorer() {
             nodeCanvasObject={(node: any, ctx: any, globalScale: number) => {
               // eslint-disable-line @typescript-eslint/no-explicit-any
               const label = node.name || node.entity_name || '';
-              const fontSize = Math.max(10, 14 / globalScale);
               const x = node.x ?? 0;
               const y = node.y ?? 0;
-
+              const nodeType = (node.type || 'entity') as GraphNode['type'];
               const isHovered = hoveredNode?.id === node.id;
               const isHighlighted = highlightNodes.has(node.id);
               const isDimmed = hoveredNode && !isHighlighted;
 
               const baseSize =
-                node.type === 'collection'
-                  ? 10
-                  : node.type === 'document'
-                    ? 7
-                    : 5;
-              const size = isHovered ? baseSize * 1.4 : baseSize;
-
-              if (isHovered) {
-                ctx.shadowBlur = 20;
-                ctx.shadowColor = getNodeColor(node);
-              } else {
-                ctx.shadowBlur = 0;
-              }
-
-              ctx.fillStyle = isDimmed
+                nodeType === 'collection'
+                  ? 16
+                  : nodeType === 'document'
+                    ? 12
+                    : 7;
+              const size = isHovered ? baseSize * 1.2 : baseSize;
+              const fillColor = isDimmed
                 ? resolvedTheme === 'dark'
-                  ? '#333'
-                  : '#ddd'
+                  ? '#2f3542'
+                  : '#d4d4d4'
                 : getNodeColor(node);
+
+              ctx.save();
+              ctx.translate(x, y);
+              ctx.fillStyle = fillColor;
               ctx.strokeStyle =
-                isHovered || isHighlighted
-                  ? resolvedTheme === 'dark'
-                    ? '#fff'
-                    : '#000'
-                  : 'rgba(0,0,0,0.2)';
-              ctx.lineWidth = isHovered ? 3 : isHighlighted ? 2 : 1;
+                resolvedTheme === 'dark' ? 'rgba(255,255,255,0.15)' : '#ffffff';
+              ctx.lineWidth = isHovered ? 2 : 1;
+
               ctx.beginPath();
-
-              if (node.type === 'collection') {
-                const radius = size * 0.2;
-                ctx.moveTo(x - size + radius, y - size);
-                ctx.lineTo(x + size - radius, y - size);
-                ctx.quadraticCurveTo(
-                  x + size,
-                  y - size,
-                  x + size,
-                  y - size + radius,
-                );
-                ctx.lineTo(x + size, y + size - radius);
-                ctx.quadraticCurveTo(
-                  x + size,
-                  y + size,
-                  x + size - radius,
-                  y + size,
-                );
-                ctx.lineTo(x - size + radius, y + size);
-                ctx.quadraticCurveTo(
-                  x - size,
-                  y + size,
-                  x - size,
-                  y + size - radius,
-                );
-                ctx.lineTo(x - size, y - size + radius);
-                ctx.quadraticCurveTo(
-                  x - size,
-                  y - size,
-                  x - size + radius,
-                  y - size,
-                );
+              if (nodeType === 'collection') {
+                ctx.rect(-size * 0.8, -size * 0.8, size * 1.6, size * 1.6);
+                ctx.fill();
+                ctx.stroke();
+              } else if (nodeType === 'document') {
+                ctx.moveTo(0, -size);
+                ctx.lineTo(size, size);
+                ctx.lineTo(-size, size);
                 ctx.closePath();
-              } else if (node.type === 'document') {
-                ctx.moveTo(x, y - size);
-                ctx.lineTo(x + size * 0.866, y + size * 0.5);
-                ctx.lineTo(x - size * 0.866, y + size * 0.5);
-                ctx.closePath();
+                ctx.fill();
               } else {
-                ctx.arc(x, y, size, 0, 2 * Math.PI, false);
+                ctx.arc(0, 0, size * 0.6, 0, 2 * Math.PI);
+                ctx.fill();
               }
-              ctx.fill();
-              ctx.stroke();
-              ctx.shadowBlur = 0;
+              ctx.restore();
 
-              if (globalScale > 0.8 || isHovered) {
+              const shouldShowLabel =
+                nodeType === 'collection' || isHovered || globalScale > 1.2;
+              const fontSize = Math.max(12 / globalScale, 3);
+
+              if (shouldShowLabel && label) {
                 ctx.font = `${isHovered ? 'bold ' : ''}${fontSize}px Sans-Serif`;
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'top';
 
                 const textWidth = ctx.measureText(label).width;
                 const padding = 4;
-                const labelY = y + size + 4;
+                const labelY = y + size + 6;
 
                 ctx.fillStyle =
                   resolvedTheme === 'dark'
-                    ? 'rgba(0,0,0,0.7)'
+                    ? 'rgba(0,0,0,0.75)'
                     : 'rgba(255,255,255,0.9)';
                 ctx.fillRect(
                   x - textWidth / 2 - padding,
                   labelY - 2,
                   textWidth + padding * 2,
-                  fontSize + 4,
+                  fontSize + 6,
                 );
 
-                ctx.fillStyle = isDimmed
-                  ? resolvedTheme === 'dark'
-                    ? '#666'
-                    : '#999'
-                  : resolvedTheme === 'dark'
-                    ? '#fff'
-                    : '#000';
+                ctx.fillStyle = resolvedTheme === 'dark' ? '#fff' : '#000';
                 ctx.fillText(label, x, labelY);
               }
 
-              if (node.type === 'collection' || node.type === 'document') {
+              if (nodeType === 'collection' || nodeType === 'document') {
+                const indicatorRadius = Math.max(6 / globalScale, 3);
+                const indicatorX = x;
+                const indicatorY = y - size - indicatorRadius - 2;
                 const isExpanded = expandedNodes.has(node.id);
-                const indicatorSize = size * 0.4;
 
-                ctx.fillStyle = resolvedTheme === 'dark' ? '#1a1a1a' : '#fff';
-                ctx.strokeStyle = getNodeColor(node);
-                ctx.lineWidth = 2;
                 ctx.beginPath();
-                ctx.arc(x, y, indicatorSize, 0, 2 * Math.PI, false);
+                ctx.fillStyle =
+                  resolvedTheme === 'dark' ? '#0f172a' : 'rgba(255,255,255,0.95)';
+                ctx.strokeStyle = fillColor;
+                ctx.lineWidth = 1;
+                ctx.arc(indicatorX, indicatorY, indicatorRadius, 0, 2 * Math.PI);
                 ctx.fill();
                 ctx.stroke();
 
-                ctx.fillStyle = getNodeColor(node);
-                ctx.font = `bold ${fontSize * 1.1}px Sans-Serif`;
+                ctx.fillStyle = fillColor;
+                ctx.font = `bold ${Math.max(10 / globalScale, 3)}px Sans-Serif`;
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
-                ctx.fillText(isExpanded ? '−' : '+', x, y);
+                ctx.fillText(isExpanded ? '−' : '+', indicatorX, indicatorY);
               }
             }}
           />
@@ -906,25 +680,21 @@ export function GlobalGraphExplorer() {
       <Dialog open={nodeDetailOpen} onOpenChange={setNodeDetailOpen}>
         <DialogContent className="max-h-[80vh] max-w-2xl overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              {selectedNode?.name || selectedNode?.entity_name}
-              {(selectedNode?.type === 'collection' ||
-                selectedNode?.type === 'document') && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-6 gap-1 text-xs"
-                  onClick={() => selectedNode && navigateToGraph(selectedNode)}
-                  title="View Knowledge Graph"
-                >
-                  <ExternalLink className="h-3 w-3" />
-                  View Graph
-                </Button>
+            <DialogTitle className="flex items-center gap-2 text-lg">
+              {selectedNode?.type === 'collection' && (
+                <Folder className="h-5 w-5 text-blue-500" />
               )}
+              {selectedNode?.type === 'document' && (
+                <FileText className="h-5 w-5 text-emerald-500" />
+              )}
+              {selectedNode?.type === 'entity' && (
+                <Network className="h-5 w-5 text-amber-500" />
+              )}
+              <span>{selectedNode?.name || selectedNode?.entity_name}</span>
             </DialogTitle>
             <DialogDescription>
               {selectedNode?.type && (
-                <Badge variant="secondary" className="mt-2">
+                <Badge variant="secondary" className="mt-2 capitalize">
                   {selectedNode.type}
                 </Badge>
               )}
@@ -933,28 +703,55 @@ export function GlobalGraphExplorer() {
           <div className="space-y-4">
             {(selectedNode?.type === 'collection' ||
               selectedNode?.type === 'document') && (
-              <div className="border-primary/20 bg-primary/5 rounded-lg border p-3">
-                <div className="mb-2 flex items-center gap-2 text-sm font-semibold">
-                  <ExternalLink className="h-4 w-4" />
-                  Quick Actions
+                <div className="border-primary/20 bg-primary/5 rounded-lg border p-4">
+                  <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-primary">
+                    🚀 Quick Navigation
+                  </div>
+                  <Button
+                    onClick={() => selectedNode && navigateToGraph(selectedNode)}
+                    className="w-full gap-2"
+                    size="default"
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                    Enter{' '}
+                    {selectedNode.type === 'collection'
+                      ? 'Collection'
+                      : 'Document'}{' '}
+                    Graph
+                  </Button>
+                  <p className="text-muted-foreground mt-3 text-xs">
+                    {selectedNode.type === 'collection'
+                      ? 'Explore every entity and relationship inside this knowledge base.'
+                      : 'Jump directly into the graph generated from this document.'}
+                  </p>
                 </div>
-                <Button
-                  onClick={() => selectedNode && navigateToGraph(selectedNode)}
-                  className="w-full"
-                  size="sm"
-                >
-                  <ExternalLink className="mr-2 h-4 w-4" />
-                  Open{' '}
-                  {selectedNode?.type === 'collection'
-                    ? 'Collection'
-                    : 'Document'}{' '}
-                  Knowledge Graph
-                </Button>
-                <p className="text-muted-foreground mt-2 text-xs">
-                  {selectedNode?.type === 'collection'
-                    ? 'View all entities and relationships in this collection'
-                    : 'View entities extracted from this document'}
+              )}
+
+            {selectedDescription && (
+              <div>
+                <div className="mb-1 text-sm font-semibold">Description</div>
+                <p className="text-muted-foreground text-sm">
+                  {selectedDescription}
                 </p>
+              </div>
+            )}
+
+            {selectedMetadataEntries.length > 0 && (
+              <div>
+                <div className="mb-1 text-sm font-semibold">Metadata</div>
+                <div className="grid gap-1 rounded-md border p-2 text-xs">
+                  {selectedMetadataEntries.map(([key, value]) => (
+                    <div
+                      key={key}
+                      className="flex items-center justify-between gap-2"
+                    >
+                      <span className="text-muted-foreground capitalize">
+                        {key.replace(/_/g, ' ')}
+                      </span>
+                      <span className="font-medium">{String(value)}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 

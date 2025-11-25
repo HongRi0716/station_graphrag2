@@ -20,6 +20,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from aperag.db.models import User
 from aperag.exceptions import CollectionNotFoundException
 from aperag.schema import view_models
+from aperag.service.global_graph_service import global_graph_service
 from aperag.utils.audit_decorator import audit
 
 # Import authentication dependencies
@@ -170,36 +171,15 @@ async def global_graph_search_view(
     user: User = Depends(required_user),
 ) -> Dict[str, Any]:
     """Search for entities across all collections (Global Graph)"""
-    from aperag.db.ops import async_db_ops
-    from aperag.graph import lightrag_manager
-    from aperag.schema.utils import parseCollectionConfig
-
-    # 1. Get any collection to initialize LightRAG (we need LLM config)
-    # We try to find a collection with knowledge graph enabled
-    collections = await async_db_ops.query_collections([str(user.id)])
-    target_collection = None
-    
-    for col in collections:
-        config = parseCollectionConfig(col.config)
-        if config.enable_knowledge_graph:
-            target_collection = col
-            break
-            
-    if not target_collection and collections:
-        target_collection = collections[0]
-        
-    if not target_collection:
-        return {"nodes": [], "edges": [], "message": "No collections found to initialize graph search"}
-
     try:
-        # 2. Initialize LightRAG
-        rag = await lightrag_manager.create_lightrag_instance(target_collection)
-        
-        # 3. Execute Global Search with Graph Data
-        graph_data = await rag.get_global_graph_data(query=query, top_k=top_k)
-        
+        graph_data = await global_graph_service.get_global_graph_search(
+            user_id=str(user.id),
+            query=query,
+            top_k=top_k,
+        )
         return graph_data
-        
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
     except Exception as e:
         logger.error(f"Global graph search failed: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Global search failed: {str(e)}")
@@ -213,91 +193,15 @@ async def global_graph_hierarchy_view(
     user: User = Depends(required_user),
 ) -> Dict[str, Any]:
     """Get hierarchical graph data showing Collection -> Document relationships"""
-    from aperag.db.ops import async_db_ops
-
     try:
-        # 1. Get user's collections
-        collections = await async_db_ops.query_collections([str(user.id)])
-        
-        if not collections:
-            return {"nodes": [], "edges": []}
-
-        # Build nodes and edges
-        nodes = []
-        edges = []
-        
-        # Add Collection nodes
-        collection_ids = []
-        for col in collections:
-            collection_ids.append(col.id)
-            nodes.append({
-                "id": f"col_{col.id}",
-                "type": "collection",
-                "name": col.title,
-                "description": col.description or "",
-                "metadata": {
-                    "collection_id": col.id,
-                    "created_at": int(col.gmt_created.timestamp()) if col.gmt_created else None
-                }
-            })
-
-        # 2. Get documents for these collections
-        documents = []
-        for collection_id in collection_ids:
-            collection_docs = await async_db_ops.query_documents([str(user.id)], collection_id)
-            documents.extend(collection_docs)
-        
-        document_id_to_collection = {}
-        for doc in documents:
-            doc_id = doc.id
-            document_id_to_collection[doc_id] = doc.collection_id
-            
-            nodes.append({
-                "id": f"doc_{doc_id}",
-                "type": "document",
-                "name": doc.name,
-                "metadata": {
-                    "document_id": doc_id,
-                    "collection_id": doc.collection_id,
-                    "size": doc.size,
-                    "created_at": int(doc.gmt_created.timestamp()) if doc.gmt_created else None
-                }
-            })
-            
-            # Add CONTAINS edge: Collection -> Document
-            edges.append({
-                "source": f"col_{doc.collection_id}",
-                "target": f"doc_{doc_id}",
-                "type": "CONTAINS",
-                "label": "contains"
-            })
-
-        # Add summary statistics
-        node_types = {}
-        for node in nodes:
-            node_type = node.get("type", "unknown")
-            node_types[node_type] = node_types.get(node_type, 0) + 1
-        
-        edge_types = {}
-        for edge in edges:
-            edge_type = edge.get("type", "unknown")
-            edge_types[edge_type] = edge_types.get(edge_type, 0) + 1
-        
-        logger.info(f"Global hierarchy graph: {len(nodes)} nodes, {len(edges)} edges")
-        logger.info(f"Node types: {node_types}")
-        logger.info(f"Edge types: {edge_types}")
-        
-        return {
-            "nodes": nodes,
-            "edges": edges,
-            "statistics": {
-                "total_nodes": len(nodes),
-                "total_edges": len(edges),
-                "node_types": node_types,
-                "edge_types": edge_types
-            }
-        }
-        
+        graph_data = await global_graph_service.get_global_hierarchy(
+            user_id=str(user.id),
+            top_k=top_k,
+            query=query,
+        )
+        return graph_data.model_dump()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
     except Exception as e:
         logger.error(f"Hierarchical graph query failed: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Hierarchical graph query failed: {str(e)}")
