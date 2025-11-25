@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import * as d3 from 'd3';
-import { ExternalLink, Loader2, Search } from 'lucide-react';
+import { ExternalLink, Loader2, Search, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useTheme } from 'next-themes';
 import dynamic from 'next/dynamic';
@@ -68,6 +68,7 @@ export function GlobalGraphExplorer() {
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
   const [nodeDetailOpen, setNodeDetailOpen] = useState(false);
+  const [showStats, setShowStats] = useState(true);
   const [hoveredNode, setHoveredNode] = useState<GraphNode | null>(null);
   const [highlightNodes, setHighlightNodes] = useState(new Set<string>());
   const [highlightLinks, setHighlightLinks] = useState(new Set<string>());
@@ -420,6 +421,32 @@ export function GlobalGraphExplorer() {
     graphRef.current.d3ReheatSimulation?.();
   }, [filteredGraphData.nodes.length, filteredGraphData.links.length]);
 
+  const stats = useMemo(() => {
+    const { nodes, links } = filteredGraphData;
+    const typeCounts = nodes.reduce(
+      (acc, node) => {
+        acc[node.type] = (acc[node.type] || 0) + 1;
+        return acc;
+      },
+      {} as Record<string, number>,
+    );
+
+    const linkTypeCounts = links.reduce(
+      (acc, link) => {
+        acc[link.type] = (acc[link.type] || 0) + 1;
+        return acc;
+      },
+      {} as Record<string, number>,
+    );
+
+    return {
+      totalNodes: nodes.length,
+      totalLinks: links.length,
+      typeCounts,
+      linkTypeCounts,
+    };
+  }, [filteredGraphData]);
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const getNodeColor = (node: any) => {
     return nodeTypeColors[node.type as keyof typeof nodeTypeColors] || '#999';
@@ -450,6 +477,24 @@ export function GlobalGraphExplorer() {
               <span className="ml-1">Search</span>
             </Button>
           </div>
+          {hasSearched && (
+            <div className="text-muted-foreground flex flex-col gap-1 text-xs">
+              <div className="flex items-start gap-1">
+                <span>💡</span>
+                <span>
+                  <strong>Hierarchy:</strong> Collection (□) → Document (△) →
+                  Entity (●)
+                </span>
+              </div>
+              <div className="pl-5 text-xs">
+                • Single click: expand/collapse nodes
+              </div>
+              <div className="pl-5 text-xs">
+                • Double click: open detailed knowledge graph
+              </div>
+              <div className="pl-5 text-xs">• Hover: highlight connections</div>
+            </div>
+          )}
           {hasSearched && filteredGraphData.nodes.length > 200 && (
             <div className="flex items-start gap-1 text-xs text-yellow-600 dark:text-yellow-500">
               <span>⚠️</span>
@@ -461,6 +506,142 @@ export function GlobalGraphExplorer() {
           )}
         </Card>
       </div>
+
+      {hasSearched && filteredGraphData.nodes.length > 0 && (
+        <div className="absolute top-32 left-4 z-10 flex flex-col gap-2">
+          <Card className="bg-background/95 max-w-xs p-3 shadow-lg backdrop-blur-sm">
+            <div className="text-muted-foreground mb-2 text-xs font-bold tracking-wide uppercase">
+              Node Types
+            </div>
+            <div className="flex flex-col gap-2">
+              <div className="hover:bg-muted/50 flex items-center gap-2 rounded p-1">
+                <div
+                  className="h-4 w-4 rounded-sm border border-gray-300"
+                  style={{ backgroundColor: nodeTypeColors.collection }}
+                ></div>
+                <span className="text-xs font-medium">Collection</span>
+                <span className="text-muted-foreground ml-auto text-xs">□</span>
+              </div>
+              <div className="hover:bg-muted/50 flex items-center gap-2 rounded p-1">
+                <div
+                  className="h-4 w-4 border border-gray-300"
+                  style={{
+                    backgroundColor: nodeTypeColors.document,
+                    clipPath: 'polygon(50% 0%, 100% 100%, 0% 100%)',
+                  }}
+                ></div>
+                <span className="text-xs font-medium">Document</span>
+                <span className="text-muted-foreground ml-auto text-xs">△</span>
+              </div>
+              <div className="hover:bg-muted/50 flex items-center gap-2 rounded p-1">
+                <div
+                  className="h-4 w-4 rounded-full border border-gray-300"
+                  style={{ backgroundColor: nodeTypeColors.entity }}
+                ></div>
+                <span className="text-xs font-medium">Entity</span>
+                <span className="text-muted-foreground ml-auto text-xs">●</span>
+              </div>
+            </div>
+          </Card>
+
+          {showStats && (
+            <Card className="bg-background/95 max-w-xs p-3 shadow-lg backdrop-blur-sm">
+              <div className="mb-2 flex items-center justify-between">
+                <div className="text-muted-foreground text-xs font-bold tracking-wide uppercase">
+                  Statistics
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="hover:bg-destructive/10 h-6 w-6 p-0"
+                  onClick={() => setShowStats(false)}
+                  title="Hide statistics"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+              <div className="flex flex-col gap-1 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Total Nodes:</span>
+                  <span className="font-bold">{stats.totalNodes}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Total Links:</span>
+                  <span className="font-bold">{stats.totalLinks}</span>
+                </div>
+
+                {stats.totalNodes > 0 && (
+                  <>
+                    <div className="my-1 border-t"></div>
+                    <div className="text-muted-foreground mb-1 text-xs font-semibold">
+                      Node Types:
+                    </div>
+                    {Object.entries(stats.typeCounts)
+                      .filter(
+                        ([type]) => type !== 'undefined' && type !== 'unknown',
+                      )
+                      .map(([type, count]) => (
+                        <div
+                          key={type}
+                          className="flex items-center justify-between gap-2 pl-2"
+                        >
+                          <div className="flex items-center gap-2">
+                            <div
+                              className="h-3 w-3 rounded-sm"
+                              style={{
+                                backgroundColor:
+                                  nodeTypeColors[
+                                    type as keyof typeof nodeTypeColors
+                                  ] || '#999',
+                              }}
+                            ></div>
+                            <span className="capitalize">
+                              {type === 'collection'
+                                ? 'Collections'
+                                : type === 'document'
+                                  ? 'Documents'
+                                  : type === 'entity'
+                                    ? 'Entities'
+                                    : type}
+                            </span>
+                          </div>
+                          <span className="font-medium">{count}</span>
+                        </div>
+                      ))}
+                  </>
+                )}
+
+                {hoveredNode && (
+                  <>
+                    <div className="my-2 border-t"></div>
+                    <div className="bg-primary/10 rounded p-2">
+                      <div className="mb-1 text-xs font-bold">
+                        Selected Node:
+                      </div>
+                      <div
+                        className="mb-1 truncate font-medium"
+                        title={hoveredNode.name || hoveredNode.entity_name}
+                      >
+                        {hoveredNode.name || hoveredNode.entity_name}
+                      </div>
+                      <div className="text-muted-foreground flex items-center justify-between">
+                        <span>Type:</span>
+                        <span className="capitalize">{hoveredNode.type}</span>
+                      </div>
+                      <div className="text-muted-foreground mt-1 flex items-center justify-between border-t pt-1">
+                        <span>Connections:</span>
+                        <span className="font-medium">
+                          {highlightNodes.size - 1}
+                        </span>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            </Card>
+          )}
+        </div>
+      )}
 
       {/* Graph Container */}
       <div

@@ -2,13 +2,12 @@ import logging
 from typing import Dict, List, Optional
 
 from aperag.agent.core.base import BaseAgent
+from aperag.agent.core.generic import PromptDrivenAgent
 from aperag.agent.core.models import AgentRole
+from aperag.agent.prompts import get_agent_prompt
 from aperag.agent.specialists.archivist import ArchivistAgent
 from aperag.agent.specialists.calculator import CalculatorAgent
-from aperag.agent.specialists.diagnostician import DiagnosticianAgent
-from aperag.agent.specialists.instructor import InstructorAgent
 from aperag.agent.specialists.scribe import ScribeAgent
-from aperag.agent.specialists.sentinel import SentinelAgent
 from aperag.agent.specialists.detective import DetectiveAgent
 from aperag.agent.specialists.gatekeeper import GatekeeperAgent
 from aperag.agent.specialists.prophet import ProphetAgent
@@ -45,14 +44,31 @@ class AgentRegistry:
 
         logger.info("Initializing default specialist agents...")
 
-        # 核心检索和诊断Agent
+        # 核心检索和通用 Agent
         self.register(ArchivistAgent(retrieve_service=retrieve_service))
-        self.register(DiagnosticianAgent(llm_service=llm_service))
-        self.register(InstructorAgent(llm_service=llm_service))
         self.register(CalculatorAgent(llm_service=llm_service))
         self.register(ScribeAgent(llm_service=llm_service))
-        # 修复：添加Sentinel注册
-        self.register(SentinelAgent(llm_service=llm_service))
+
+        generic_roles = [
+            (AgentRole.DIAGNOSTICIAN, "故障诊断专家", "负责分析故障现象和日志"),
+            (AgentRole.INSTRUCTOR, "技能培训导师", "负责解释技术原理和培训"),
+            (AgentRole.SENTINEL, "安监卫士", "负责审核操作票和安全风险"),
+        ]
+
+        for role, name, description in generic_roles:
+            try:
+                system_prompt = get_agent_prompt(role)
+                agent = PromptDrivenAgent(
+                    role=role,
+                    name=name,
+                    description=description,
+                    llm_service=llm_service,
+                    system_prompt=system_prompt,
+                )
+                self.register(agent)
+            except Exception as exc:
+                logger.error(
+                    "Failed to register generic agent %s: %s", name, exc)
 
         # 新增的4个核心Agent
         self.register(DetectiveAgent(llm_service=llm_service,

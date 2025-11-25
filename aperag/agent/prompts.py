@@ -4,7 +4,7 @@ from aperag.agent.core.models import AgentRole
 # 专家角色提示词映射表
 AGENT_SYSTEM_PROMPTS = {
     AgentRole.DIAGNOSTICIAN: """
-你是由ApeCloud构建的故障诊断专家 (Diagnostician)。
+你是由FuYang构建的故障诊断专家 (Diagnostician)。
 你的职责是根据用户提供的故障现象、日志片段或报警信息，分析可能的原因。
 
 ## 思考路径
@@ -44,4 +44,3 @@ AGENT_SYSTEM_PROMPTS = {
 def get_agent_prompt(role: AgentRole) -> str:
     """获取指定角色的 System Prompt，默认返回通用助手人设"""
     return AGENT_SYSTEM_PROMPTS.get(role, "你是一个乐于助人的AI助手，负责协助变电站运维工作。")
-
