@@ -175,9 +175,9 @@ def get_jwt_strategy() -> JWTStrategy:
 cookie_transport = CookieTransport(
     cookie_name="session",
     cookie_max_age=COOKIE_MAX_AGE,
-    cookie_secure=False,  # Set to False for HTTP development environment
+    cookie_secure=settings.auth_cookie_secure,
     cookie_httponly=True,
-    cookie_samesite="lax",
+    cookie_samesite=settings.auth_cookie_samesite,
 )
 
 # Authentication backend
@@ -534,9 +534,15 @@ async def login_view(
     strategy = get_jwt_strategy()
     token = await strategy.write_token(user)
 
-    # Set cookie
-    response.set_cookie(key="session", value=token,
-                        max_age=COOKIE_MAX_AGE, httponly=True, samesite="lax")
+    # Set cookie using configured security attributes
+    response.set_cookie(
+        key="session",
+        value=token,
+        max_age=COOKIE_MAX_AGE,
+        httponly=True,
+        samesite=settings.auth_cookie_samesite,
+        secure=settings.auth_cookie_secure,
+    )
 
     return view_models.User(
         id=str(user.id),

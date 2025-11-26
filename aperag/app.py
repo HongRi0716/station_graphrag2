@@ -32,6 +32,8 @@ if settings.otel_enabled:
     )
 
 from fastapi import FastAPI  # noqa: E402
+from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware  # noqa: E402
 
 from aperag.agent.agent_event_listener import agent_event_listener  # noqa: E402
 from aperag.agent.agent_session_manager_lifecycle import agent_session_manager_lifespan  # noqa: E402
@@ -90,6 +92,21 @@ app = FastAPI(
     version="1.0.0",
     lifespan=combined_lifespan,  # Combined lifecycle management
 )
+
+# Configure proxy headers middleware to respect forwarded HTTPS info
+app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=["*"])
+
+# Configure CORS based on settings
+if settings.cors_allow_origins:
+    origins = [origin.strip()
+               for origin in settings.cors_allow_origins.split(",") if origin.strip()]
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 # Register global exception handlers
 register_exception_handlers(app)

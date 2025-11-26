@@ -86,6 +86,8 @@ class Config(BaseSettings):
     # Auth
     auth_type: str = Field("none", alias="AUTH_TYPE")
     jwt_secret: str = Field("SECRET", alias="JWT_SECRET")
+    auth_cookie_secure: bool = Field(False, alias="AUTH_COOKIE_SECURE")
+    auth_cookie_samesite: str = Field("lax", alias="AUTH_COOKIE_SAMESITE")
     oauth_redirect_url: str = Field(
         "http://localhost:3000/auth/callback", alias="OAUTH_REDIRECT_URL")
     google_oauth_client_id: str = Field("", alias="GOOGLE_OAUTH_CLIENT_ID")
@@ -100,6 +102,7 @@ class Config(BaseSettings):
     authing_app_id: str = Field("", alias="AUTHING_APP_ID")
     logto_domain: str = Field("aperag.authing.cn", alias="LOGTO_DOMAIN")
     logto_app_id: str = Field("", alias="LOGTO_APP_ID")
+    cors_allow_origins: str = Field("*", alias="CORS_ALLOW_ORIGINS")
 
     # Celery
     celery_broker_url: Optional[str] = Field(None, alias="CELERY_BROKER_URL")
