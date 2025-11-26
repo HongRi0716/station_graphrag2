@@ -17,7 +17,8 @@ import logging
 import mimetypes
 import os
 import re
-from typing import List
+from collections import defaultdict
+from typing import Dict, List, Optional
 
 from fastapi import HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
@@ -1074,6 +1075,36 @@ class DocumentService:
             return result.scalars().all()
 
         return await self.db_ops._execute_query(_query)
+
+    async def get_documents_by_collection_ids(
+        self, user_id: str, collection_ids: List[str]
+    ) -> Dict[str, List[db_models.Document]]:
+        """
+        Fetch documents for multiple collections in a single call.
+        """
+        if not collection_ids:
+            return {}
+
+        documents = await self.db_ops.query_documents_by_collection_ids(user_id, collection_ids)
+        grouped: Dict[str, List[db_models.Document]] = defaultdict(list)
+        for doc in documents:
+            grouped[str(doc.collection_id)].append(doc)
+        return grouped
+
+    async def search_documents_by_name(
+        self,
+        user_id: str,
+        query: str,
+        limit: int = 100,
+        collection_ids: Optional[List[str]] = None,
+    ) -> List[db_models.Document]:
+        """
+        Case-insensitive document name search scoped to a user.
+        """
+        if not query:
+            return []
+
+        return await self.db_ops.search_documents_by_name(user_id, query, limit, collection_ids)
 
     async def get_document_object(
         self, user_id: str, collection_id: str, document_id: str, path: str, range_header: str = None

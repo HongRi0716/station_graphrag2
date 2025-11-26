@@ -34,6 +34,7 @@ from aperag.schema.view_models import (
 from aperag.service.collection_summary_service import collection_summary_service
 from aperag.service.marketplace_collection_service import marketplace_collection_service
 from aperag.service.marketplace_service import marketplace_service
+from aperag.service.llm_available_model_service import llm_available_model_service
 from aperag.utils.constant import QuotaType
 from aperag.views.utils import validate_source_connect_config
 from config.celery_tasks import collection_delete_task, collection_init_task
@@ -49,7 +50,8 @@ class CollectionService:
         if session is None:
             self.db_ops = async_db_ops  # Use global instance
         else:
-            self.db_ops = AsyncDatabaseOps(session)  # Create custom instance for transaction control
+            # Create custom instance for transaction control
+            self.db_ops = AsyncDatabaseOps(session)
 
     async def build_collection_response(self, instance: db_models.Collection) -> view_models.Collection:
         """Build Collection response object for API return."""
@@ -69,7 +71,8 @@ class CollectionService:
         if collection.type != db_models.CollectionType.DOCUMENT:
             raise ValidationException("collection type is not supported")
 
-        is_validate, error_msg = validate_source_connect_config(collection_config)
+        is_validate, error_msg = validate_source_connect_config(
+            collection_config)
         if not is_validate:
             raise ValidationException(error_msg)
 
@@ -81,7 +84,8 @@ class CollectionService:
             await quota_service.check_and_consume_quota(user, "max_collection_count", 1, session)
 
             # Create collection within the same transaction
-            config_str = dumpCollectionConfig(collection_config) if collection.config is not None else None
+            config_str = dumpCollectionConfig(
+                collection_config) if collection.config is not None else None
 
             from aperag.db.models import Collection, CollectionStatus
             from aperag.utils.utils import utc_now
@@ -118,7 +122,7 @@ class CollectionService:
             )
             try:
                 from aperag.service.document_service import document_service
-                
+
                 # Copy documents asynchronously after collection is created
                 # This runs in the background and doesn't block the collection creation response
                 copy_result = await document_service.copy_documents_from_collections(
@@ -127,7 +131,8 @@ class CollectionService:
                     source_collection_ids=collection.source_collection_ids,
                     deduplicate=True  # Always deduplicate by document name
                 )
-                logger.info(f"Document copy result for collection {instance.id}: {copy_result}")
+                logger.info(
+                    f"Document copy result for collection {instance.id}: {copy_result}")
             except Exception as e:
                 # Log error but don't fail collection creation
                 logger.error(
@@ -208,7 +213,8 @@ class CollectionService:
                 import logging
 
                 logger = logging.getLogger(__name__)
-                logger.warning(f"Failed to get subscribed collections for user {user_id}: {e}")
+                logger.warning(
+                    f"Failed to get subscribed collections for user {user_id}: {e}")
 
         # 3. Sort by update time
         items.sort(key=lambda x: x.updated or x.created, reverse=True)
@@ -219,7 +225,8 @@ class CollectionService:
         paginated_items = items[start_idx:end_idx]
 
         return view_models.CollectionViewList(
-            items=paginated_items, pageResult=view_models.PageResult(total=len(items), page=page, page_size=page_size)
+            items=paginated_items, pageResult=view_models.PageResult(
+                total=len(items), page=page, page_size=page_size)
         )
 
     async def get_all_collections(self, user_id: str) -> List[db_models.Collection]:
@@ -693,67 +700,190 @@ class CollectionService:
             logger.error(f"Failed to get preset collections config: {e}")
             return {"enabled": False, "collections": [], "categories": {}}
 
+    async def _get_default_embedding_model(self, user_id: str) -> Optional[view_models.ModelSpec]:
+        """Get default embedding model for preset collections"""
+        try:
+            from aperag.schema.view_models import TagFilterCondition, TagFilterRequest
+
+            # First, try to get models with default_for_embedding tag
+            tag_filter_request = TagFilterRequest(
+                tag_filters=[TagFilterCondition(
+                    operation="AND", tags=["default_for_embedding"])]
+            )
+            models = await llm_available_model_service.get_available_models(user_id, tag_filter_request)
+
+            # Find first embedding model with default_for_embedding tag
+            for provider in models.items or []:
+                for embedding_model in provider.embedding or []:
+                    return view_models.ModelSpec(
+                        model=embedding_model.model,
+                        model_service_provider=provider.name,
+                        custom_llm_provider=embedding_model.custom_llm_provider,
+                    )
+
+            # If no default_for_embedding models found, try enable_for_collection tag
+            tag_filter_request = TagFilterRequest(
+                tag_filters=[TagFilterCondition(
+                    operation="AND", tags=["enable_for_collection"])]
+            )
+            models = await llm_available_model_service.get_available_models(user_id, tag_filter_request)
+
+            # Find first embedding model with enable_for_collection tag
+            for provider in models.items or []:
+                for embedding_model in provider.embedding or []:
+                    return view_models.ModelSpec(
+                        model=embedding_model.model,
+                        model_service_provider=provider.name,
+                        custom_llm_provider=embedding_model.custom_llm_provider,
+                    )
+
+            logger.warning(
+                f"No suitable embedding model found for user {user_id}")
+            return None
+
+        except Exception as e:
+            logger.error(
+                f"Failed to get default embedding model for user {user_id}: {e}")
+            return None
+
+    async def _get_default_completion_model(self, user_id: str) -> Optional[view_models.ModelSpec]:
+        """Get default completion model for preset collections"""
+        try:
+            from aperag.schema.view_models import TagFilterCondition, TagFilterRequest
+
+            # First, try to get models with default_for_collection_completion tag
+            tag_filter_request = TagFilterRequest(
+                tag_filters=[TagFilterCondition(
+                    operation="AND", tags=["default_for_collection_completion"])]
+            )
+            models = await llm_available_model_service.get_available_models(user_id, tag_filter_request)
+
+            # Find first completion model with default_for_collection_completion tag
+            for provider in models.items or []:
+                for completion_model in provider.completion or []:
+                    return view_models.ModelSpec(
+                        model=completion_model.model,
+                        model_service_provider=provider.name,
+                        custom_llm_provider=completion_model.custom_llm_provider,
+                    )
+
+            # If no default_for_collection_completion models found, try enable_for_collection tag
+            tag_filter_request = TagFilterRequest(
+                tag_filters=[TagFilterCondition(
+                    operation="AND", tags=["enable_for_collection"])]
+            )
+            models = await llm_available_model_service.get_available_models(user_id, tag_filter_request)
+
+            # Find first completion model with enable_for_collection tag
+            for provider in models.items or []:
+                for completion_model in provider.completion or []:
+                    return view_models.ModelSpec(
+                        model=completion_model.model,
+                        model_service_provider=provider.name,
+                        custom_llm_provider=completion_model.custom_llm_provider,
+                    )
+
+            logger.warning(
+                f"No suitable completion model found for user {user_id}")
+            return None
+
+        except Exception as e:
+            logger.error(
+                f"Failed to get default completion model for user {user_id}: {e}")
+            return None
+
     async def create_preset_collections_for_user(
         self, user: str, locale: str = "zh"
     ) -> list[view_models.Collection]:
         """
         Create all enabled preset collections for a user.
-        
+
         Args:
             user: User ID
             locale: Language locale ('zh' or 'en')
-            
+
         Returns:
             List of created collections
         """
         config = await self.get_preset_collections_config()
-        
+
         if not config.get("enabled", False):
             logger.info("Preset collections are disabled in configuration")
             return []
-        
+
+        # Get default embedding and completion models for the user
+        embedding_model = await self._get_default_embedding_model(user)
+        completion_model = await self._get_default_completion_model(user)
+
+        if not embedding_model:
+            logger.warning(
+                f"No default embedding model found for user {user}, preset collections will be created without embedding model")
+
+        if not completion_model:
+            logger.warning(
+                f"No default completion model found for user {user}, preset collections will be created without completion model")
+
         created_collections = []
         collections_data = config.get("collections", [])
-        
+
         for preset in collections_data:
             if not preset.get("auto_create", True):
                 continue
-            
+
             try:
                 # Determine title and description based on locale
-                title = preset.get(f"title_{locale}", preset.get("title_zh", ""))
-                description = preset.get(f"description_{locale}", preset.get("description_zh", ""))
-                
+                title = preset.get(
+                    f"title_{locale}", preset.get("title_zh", ""))
+                description = preset.get(
+                    f"description_{locale}", preset.get("description_zh", ""))
+
+                # Create collection config with embedding and completion models
+                # Note: All index enable flags must be explicitly set to ensure proper database sync
+                collection_config = view_models.CollectionConfig(
+                    source="system",
+                    enable_vector=True,  # Required: enables vector search, requires embedding model
+                    enable_fulltext=True,  # Required: enables fulltext search
+                    # Required: enables knowledge graph, requires completion model
+                    enable_knowledge_graph=True,
+                    enable_summary=False,  # Optional: summary generation
+                    enable_vision=False,  # Optional: vision processing
+                )
+
+                # Set embedding model if available
+                if embedding_model:
+                    collection_config.embedding = embedding_model
+
+                # Set completion model if available
+                if completion_model:
+                    collection_config.completion = completion_model
+
                 # Create collection
                 collection_create = view_models.CollectionCreate(
                     title=title,
                     description=description,
                     type=db_models.CollectionType.DOCUMENT,
-                    config=view_models.CollectionConfig(
-                        source="system",
-                        enable_summary=False,
-                        enable_kg=True,
-                        enable_vision=False,
-                    )
+                    config=collection_config,
                 )
-                
+
                 created = await self.create_collection(user, collection_create)
                 created_collections.append(created)
-                logger.info(f"Created preset collection '{title}' for user {user}")
-                
+                logger.info(
+                    f"Created preset collection '{title}' for user {user} with embedding model: {embedding_model.model if embedding_model else 'None'}, completion model: {completion_model.model if completion_model else 'None'}")
+
             except Exception as e:
-                logger.error(f"Failed to create preset collection {preset.get('id')}: {e}", exc_info=True)
+                logger.error(
+                    f"Failed to create preset collection {preset.get('id')}: {e}", exc_info=True)
                 continue
-        
+
         return created_collections
 
     async def update_preset_collections_config(self, config: dict) -> bool:
         """
         Update preset collections configuration in database.
-        
+
         Args:
             config: New configuration dict
-            
+
         Returns:
             True if successful
         """

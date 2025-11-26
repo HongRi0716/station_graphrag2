@@ -177,15 +177,12 @@ async def global_graph_search_view(
     try:
         # Import services for dependency injection
         from aperag.service.collection_service import collection_service
-        from aperag.service.search_service import search_service
         from aperag.service.global_graph_service import GlobalGraphService
         
         # Initialize the global graph service with its dependencies
-        # Note: In a full DI container setup, this would be injected. 
-        # Here we manually compose it to ensure isolation and immediate availability.
+        # Note: search_service is not needed for federated_graph_search
         global_service = GlobalGraphService(
             collection_service=collection_service,
-            search_service=search_service
         )
         
         # Execute federated search across all user's active collections
@@ -208,6 +205,7 @@ async def global_graph_hierarchy_view(
     request: Request,
     query: str = Body("", embed=True),
     top_k: int = Body(100, embed=True),
+    include_entities: bool = Body(True, embed=True),
     user: User = Depends(required_user),
 ) -> Dict[str, Any]:
     """Get hierarchical graph data showing Collection -> Document relationships"""
@@ -216,6 +214,7 @@ async def global_graph_hierarchy_view(
             user_id=str(user.id),
             top_k=top_k,
             query=query,
+            include_entities=include_entities,
         )
         return graph_data.model_dump()
     except ValueError as exc:
@@ -223,3 +222,25 @@ async def global_graph_hierarchy_view(
     except Exception as e:
         logger.error(f"Hierarchical graph query failed: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Hierarchical graph query failed: {str(e)}")
+
+
+@router.post("/graphs/hierarchy/global-directory", tags=["graph"])
+async def global_graph_directory_view(
+    request: Request,
+    query: str = Body("", embed=True),
+    include_empty: bool = Body(True, embed=True),
+    user: User = Depends(required_user),
+) -> Dict[str, Any]:
+    """Return lightweight Collection -> Document tree data for the Global Graph Explorer."""
+    try:
+        directory = await global_graph_service.get_directory_tree(
+            user_id=str(user.id),
+            query=query,
+            include_empty=include_empty,
+        )
+        return directory.model_dump()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as e:
+        logger.error(f"Directory tree query failed: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Directory tree query failed: {str(e)}")

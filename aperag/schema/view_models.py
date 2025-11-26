@@ -963,7 +963,8 @@ class GraphHierarchyNode(BaseModel):
 
     id: str = Field(..., description='Unique identifier for the node')
     name: str = Field(..., description='Display name for the node')
-    type: str = Field(..., description='Node type, e.g., collection/document/entity')
+    type: str = Field(...,
+                      description='Node type, e.g., collection/document/entity')
     label: Optional[str] = Field(
         None, description='Optional short label shown in UI'
     )
@@ -1008,6 +1009,68 @@ class GraphData(BaseModel):
     )
     statistics: Optional[dict[str, Any]] = Field(
         default=None, description='Optional summary statistics'
+    )
+
+
+class GraphDirectoryDocument(BaseModel):
+    """
+    Lightweight document metadata for the global directory tree.
+    """
+
+    id: str = Field(..., description='Document ID')
+    name: str = Field(..., description='Document name')
+    collection_id: str = Field(..., description='Parent collection ID')
+    status: Optional[str] = Field(
+        default=None, description='Document status (e.g. ACTIVE)'
+    )
+    size: Optional[int] = Field(
+        default=None, description='File size in bytes'
+    )
+    created_at: Optional[datetime] = Field(
+        default=None, description='Creation timestamp'
+    )
+    updated_at: Optional[datetime] = Field(
+        default=None, description='Last updated timestamp'
+    )
+    metadata: Optional[dict[str, Any]] = Field(
+        default=None, description='Additional metadata for UI consumption'
+    )
+
+
+class GraphDirectoryCollection(BaseModel):
+    """
+    Lightweight collection metadata with nested documents.
+    """
+
+    id: str = Field(..., description='Collection ID')
+    title: str = Field(..., description='Collection title')
+    description: Optional[str] = Field(
+        default=None, description='Collection description'
+    )
+    status: Optional[str] = Field(
+        default=None, description='Collection status'
+    )
+    document_count: int = Field(
+        default=0, description='Total number of documents in the collection'
+    )
+    documents: List[GraphDirectoryDocument] = Field(
+        default_factory=list, description='Documents belonging to the collection'
+    )
+
+
+class GraphDirectoryResponse(BaseModel):
+    """
+    Response payload for directory tree requests.
+    """
+
+    collections: List[GraphDirectoryCollection] = Field(
+        default_factory=list, description='Collections accessible to the user'
+    )
+    total_collections: int = Field(
+        default=0, description='Number of collections returned'
+    )
+    total_documents: int = Field(
+        default=0, description='Number of documents returned (post-filter)'
     )
 
 

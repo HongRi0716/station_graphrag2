@@ -14,7 +14,7 @@
 
 from typing import List, Optional
 
-from sqlalchemy import desc, select
+from sqlalchemy import desc, select, func
 
 from aperag.db.models import Document, DocumentStatus
 from aperag.db.repositories.base import (
@@ -239,5 +239,57 @@ class AsyncDocumentRepositoryMixin(AsyncRepositoryProtocol):
                 stmt = stmt.where(Document.status != DocumentStatus.DELETED)
             result = await session.execute(stmt)
             return result.scalars().first()
+
+        return await self._execute_query(_query)
+
+    async def query_documents_by_collection_ids(self, user: str, collection_ids: List[str]) -> List[Document]:
+        """Return all documents for the given collections in a single query."""
+        if not collection_ids:
+            return []
+
+        async def _query(session):
+            stmt = (
+                select(Document)
+                .where(
+                    Document.user == user,
+                    Document.collection_id.in_(collection_ids),
+                    Document.status != DocumentStatus.DELETED,
+                    Document.status != DocumentStatus.UPLOADED,
+                )
+                .order_by(Document.collection_id, desc(Document.gmt_updated), desc(Document.gmt_created))
+            )
+            result = await session.execute(stmt)
+            return result.scalars().all()
+
+        return await self._execute_query(_query)
+
+    async def search_documents_by_name(
+        self, user: str, query: str, limit: int = 100, collection_ids: Optional[List[str]] = None
+    ) -> List[Document]:
+        """Case-insensitive document name search scoped to the user (and optional collections)."""
+        if not query:
+            return []
+
+        wildcard = f"%{query.strip().lower()}%"
+
+        async def _query(session):
+            stmt = (
+                select(Document)
+                .where(
+                    Document.user == user,
+                    Document.status != DocumentStatus.DELETED,
+                    Document.status != DocumentStatus.UPLOADED,
+                )
+            )
+            if collection_ids:
+                stmt = stmt.where(Document.collection_id.in_(collection_ids))
+
+            stmt = (
+                stmt.where(func.lower(Document.name).like(wildcard))
+                .order_by(desc(Document.gmt_updated), desc(Document.gmt_created))
+                .limit(limit)
+            )
+            result = await session.execute(stmt)
+            return result.scalars().all()
 
         return await self._execute_query(_query)

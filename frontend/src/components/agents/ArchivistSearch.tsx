@@ -1,5 +1,7 @@
 // React组件 - Archivist知识检索界面
 import { useState, KeyboardEvent, ChangeEvent } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { agentAPI, ArchivistResponse, ThinkingStep } from '../../lib/api/agents';
 
 type SearchMode = 'knowledge' | 'graph' | 'history';
@@ -246,10 +248,12 @@ export function ArchivistSearch({ userId }: { userId: string }) {
                     {/* 答案展示 */}
                     {result.answer && (
                         <div className="answer prose max-w-none">
-                            <div
-                                className="markdown-content"
-                                dangerouslySetInnerHTML={{ __html: result.answer }}
-                            />
+                            <ReactMarkdown
+                                remarkPlugins={[remarkGfm]}
+                                className="markdown-content [&>*]:mb-3"
+                            >
+                                {result.answer}
+                            </ReactMarkdown>
                         </div>
                     )}
 

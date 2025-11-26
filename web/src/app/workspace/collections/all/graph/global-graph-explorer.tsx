@@ -11,25 +11,51 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import * as d3 from 'd3';
 import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+} from '@/components/ui/resizable';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import * as d3 from 'd3';
+import _ from 'lodash';
+import {
+  ChevronDown,
+  ChevronRight,
+  Database,
   ExternalLink,
   FileText,
-  Folder,
+  Filter,
+  Focus,
+  Layers,
   Loader2,
-  Network,
+  MessageSquare,
   RotateCcw,
+  Search,
+  X,
+  ZoomIn,
+  ZoomOut,
+  Eye,
+  Copy,
+  Maximize2,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useTheme } from 'next-themes';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
+import type { ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
-
-// [ADD] Import optimized graph components
-import { GraphContextMenu } from '@/components/graph/graph-context-menu';
-import { GraphSourceViewer } from '@/components/graph/graph-source-viewer';
 
 const ForceGraph2D = dynamic(
   () => import('react-force-graph-2d').then((mod) => mod.default || mod),
@@ -38,26 +64,22 @@ const ForceGraph2D = dynamic(
   },
 );
 
-type NodeMetadata = {
-  collection_id?: string | number;
-  document_id?: string | number;
-  description?: string;
-  [key: string]: unknown;
-};
+// --- Types ---
 
 interface GraphNode {
   id: string;
   type: 'collection' | 'document' | 'entity';
   name: string;
   description?: string;
-  metadata?: NodeMetadata;
+  metadata?: Record<string, unknown>;
   workspace?: string;
-  source_collections?: string[];
   entity_name?: string;
+  source_collections?: string[];  // 实体来源的多个 Collection
+  source_documents?: string[];    // 实体来源的多个 Document
   val?: number;
   x?: number;
   y?: number;
-  [key: string]: unknown; // Allow additional properties for D3/ForceGraph
+  [key: string]: unknown;
 }
 
 interface GraphEdge extends d3.SimulationLinkDatum<GraphNode> {
@@ -66,20 +88,103 @@ interface GraphEdge extends d3.SimulationLinkDatum<GraphNode> {
   label: string;
   type: string;
   workspace?: string;
-  [key: string]: unknown; // Allow additional properties for D3/ForceGraph
+  [key: string]: unknown;
 }
 
-const getNodeId = (nodeRef: string | { id: string }) => {
-  return typeof nodeRef === 'object' ? nodeRef.id : nodeRef;
+interface TreeNode {
+  id: string;
+  label: string;
+  type: 'collection' | 'document';
+  children?: TreeNode[];
+  metadata?: any;
+}
+
+// --- Components ---
+
+const TreeItem = ({
+  node,
+  level = 0,
+  onSelect,
+  selectedId,
+  expandedIds,
+  toggleExpand,
+  highlightIds,
+}: {
+  node: TreeNode;
+  level?: number;
+  onSelect: (node: TreeNode) => void;
+  selectedId?: string | null;
+  expandedIds: Set<string>;
+  toggleExpand: (id: string) => void;
+  highlightIds?: Set<string>;
+}) => {
+  const isExpanded = expandedIds.has(node.id);
+  const isSelected = selectedId === node.id;
+  const isHighlighted = highlightIds?.has(node.id);
+  const hasChildren = node.children && node.children.length > 0;
+
+  return (
+    <div className="w-full">
+      <div
+        className={cn(
+          'flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm transition-colors',
+          isSelected
+            ? 'bg-primary text-primary-foreground'
+            : 'hover:bg-muted/50',
+          isHighlighted && !isSelected && 'bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-400 dark:border-yellow-600',
+        )}
+        style={{ paddingLeft: `${level * 12 + 8}px` }}
+        onClick={(e) => {
+          e.stopPropagation();
+          onSelect(node);
+        }}
+      >
+        <div
+          className={cn(
+            'flex h-4 w-4 items-center justify-center rounded-sm hover:bg-black/10 dark:hover:bg-white/10',
+            !hasChildren && 'invisible',
+          )}
+          onClick={(e) => {
+            e.stopPropagation();
+            toggleExpand(node.id);
+          }}
+        >
+          {isExpanded ? (
+            <ChevronDown className="h-3 w-3" />
+          ) : (
+            <ChevronRight className="h-3 w-3" />
+          )}
+        </div>
+
+        {node.type === 'collection' ? (
+          <Database className="h-4 w-4 shrink-0 text-blue-500" />
+        ) : (
+          <FileText className="h-4 w-4 shrink-0 text-green-500" />
+        )}
+
+        <span className="truncate">{node.label}</span>
+      </div>
+      {isExpanded && hasChildren && (
+        <div>
+          {node.children!.map((child) => (
+            <TreeItem
+              key={child.id}
+              node={child}
+              level={level + 1}
+              onSelect={onSelect}
+              selectedId={selectedId}
+              expandedIds={expandedIds}
+              toggleExpand={toggleExpand}
+              highlightIds={highlightIds}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
 };
 
-const getMetadataValue = (node: GraphNode, key: keyof NodeMetadata) => {
-  const value = node.metadata?.[key];
-  if (value === undefined || value === null) {
-    return undefined;
-  }
-  return String(value);
-};
+// --- Main Component ---
 
 export function GlobalGraphExplorer() {
   const t = useTranslations('page_graph');
@@ -87,50 +192,376 @@ export function GlobalGraphExplorer() {
   const router = useRouter();
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
+  const [treeLoading, setTreeLoading] = useState(false);
+
+  // Graph Data
   const [graphData, setGraphData] = useState<{
     nodes: GraphNode[];
     links: GraphEdge[];
   }>({ nodes: [], links: [] });
+
+  // Directory Tree Data
+  const [treeData, setTreeData] = useState<TreeNode[]>([]);
+  const [expandedTreeIds, setExpandedTreeIds] = useState<Set<string>>(new Set());
+  const [selectedTreeId, setSelectedTreeId] = useState<string | null>(null);
+  const [highlightTreeIds, setHighlightTreeIds] = useState<Set<string>>(new Set());
+
+  // View Controls
+  const [hierarchicalView, setHierarchicalView] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
   const [nodeDetailOpen, setNodeDetailOpen] = useState(false);
+  const [nodeTypeFilter, setNodeTypeFilter] = useState<string>('all');
+  const [showStats, setShowStats] = useState(true);
   const [hoveredNode, setHoveredNode] = useState<GraphNode | null>(null);
   const [highlightNodes, setHighlightNodes] = useState(new Set<string>());
   const [highlightLinks, setHighlightLinks] = useState(new Set<string>());
-  const [lastClickTime, setLastClickTime] = useState(0);
-  const [lastClickedNode, setLastClickedNode] = useState<string | null>(null);
+  const [searchMatchedNodes, setSearchMatchedNodes] = useState(new Set<string>());
+  const [showAllLabels, setShowAllLabels] = useState(true); // 🔥 默认显示所有标签
+
+  // Context Menu
+  const [contextMenuNode, setContextMenuNode] = useState<GraphNode | null>(null);
+  const [contextMenuPos, setContextMenuPos] = useState({ x: 0, y: 0 });
+
+  // 🔦 Spotlight Mode
+  const [spotlightMode, setSpotlightMode] = useState(false);
+  const [spotlightNodes, setSpotlightNodes] = useState(new Set<string>());
+
+  // 📄 Source Viewer Panel
+  const [sourceViewerOpen, setSourceViewerOpen] = useState(false);
+  const [sourceViewerData, setSourceViewerData] = useState<{
+    nodeId: string;
+    nodeName: string;
+    nodeType: string;
+    metadata?: any;
+  } | null>(null);
+
   const containerRef = useRef<HTMLDivElement>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const graphRef = useRef<any>(null);
-  const hierarchicalView = true;
 
-  // [ADD] Context Menu & Source Viewer State
-  const [contextMenu, setContextMenu] = useState<{
-    open: boolean;
-    x: number;
-    y: number;
-    node: any | null;
-  }>({ open: false, x: 0, y: 0, node: null });
+  // Helper: Get one-hop neighbors
+  const getNeighbors = useCallback((nodeId: string): string[] => {
+    const neighbors: string[] = [];
+    graphData.links.forEach(link => {
+      const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
+      const targetId = typeof link.target === 'object' ? link.target.id : link.target;
 
-  const [sourceViewer, setSourceViewer] = useState<{
-    open: boolean;
-    docId: string;
-    collectionId: string;
-    docName?: string;
-    highlight?: string;
-  }>({ open: false, docId: '', collectionId: '', docName: '' });
+      if (sourceId === nodeId) neighbors.push(targetId as string);
+      if (targetId === nodeId) neighbors.push(sourceId as string);
+    });
+    return neighbors;
+  }, [graphData.links]);
 
-  const nodeTypeColors = useMemo(
-    () => ({
-      collection: '#3b82f6', // blue
-      document: '#10b981', // green
-      entity: '#f59e0b', // orange
-    }),
-    [],
-  );
+  // -- 1. Fetch Directory Tree (Collections -> Documents) --
+  const fetchDirectoryTree = useCallback(async () => {
+    setTreeLoading(true);
+    try {
+      const response = await fetch('/api/v1/graphs/hierarchy/global', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: '', top_k: 10000, include_entities: false }),
+      });
 
+      if (response.ok) {
+        const data = await response.json();
+        const nodes = data.nodes || [];
+        const edges = data.edges || [];
+
+        const collections = nodes.filter((n: any) => n.type === 'collection');
+        const documents = nodes.filter((n: any) => n.type === 'document');
+
+        const tree: TreeNode[] = collections.map((col: any) => {
+          const colId = col.id;
+          const childDocs = edges
+            .filter((e: any) => e.source === colId && e.type === 'CONTAINS')
+            .map((e: any) => {
+              const docNode = documents.find((d: any) => d.id === e.target);
+              return docNode ? {
+                id: docNode.id,
+                label: docNode.name,
+                type: 'document' as const,
+                metadata: docNode.metadata
+              } : null;
+            })
+            .filter(Boolean) as TreeNode[];
+
+          return {
+            id: colId,
+            label: col.name,
+            type: 'collection' as const,
+            children: childDocs,
+            metadata: col.metadata
+          };
+        });
+
+        setTreeData(tree);
+        setExpandedTreeIds(new Set(tree.map(t => t.id)));
+      }
+    } catch (error) {
+      console.error('Failed to fetch directory tree:', error);
+    } finally {
+      setTreeLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchDirectoryTree();
+    handleSearch(true);
+  }, [fetchDirectoryTree]);
+
+  // -- 2. Search & Graph Logic with Entity Deduplication --
+  const handleSearch = async (initialLoad = false) => {
+    if (!initialLoad && !query.trim()) return;
+
+    setLoading(true);
+    setHasSearched(true);
+    setSelectedTreeId(null);
+
+    try {
+      const endpoint = initialLoad || hierarchicalView
+        ? '/api/v1/graphs/hierarchy/global'
+        : '/api/v1/graphs/search/global';
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: query || '',
+          top_k: 50,
+          include_entities: true
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        let nodes = data.nodes || [];
+        let links = data.edges || [];
+
+        // 🔥 处理重复实体：合并来自多个文档的同名实体
+        const entityMap = new Map<string, GraphNode>();
+        const nonEntityNodes: GraphNode[] = [];
+
+        nodes.forEach((node: GraphNode) => {
+          if (!node.type) node.type = 'entity';
+
+          if (node.type === 'entity') {
+            const entityKey = node.name || node.entity_name || node.id;
+
+            if (entityMap.has(entityKey)) {
+              // 实体已存在，合并来源信息
+              const existingNode = entityMap.get(entityKey)!;
+
+              // 合并 source_collections
+              const existingCollections = existingNode.source_collections || [];
+              const newCollections = node.metadata?.workspace ? [node.metadata.workspace as string] : [];
+              existingNode.source_collections = Array.from(new Set([...existingCollections, ...newCollections]));
+
+              // 合并 source_documents
+              const existingDocs = existingNode.source_documents || [];
+              const newDocs = node.metadata?.document_id ? [node.metadata.document_id as string] : [];
+              existingNode.source_documents = Array.from(new Set([...existingDocs, ...newDocs]));
+
+              // 增加节点权重（表示重要性）
+              existingNode.val = (existingNode.val || 1) + 1;
+
+            } else {
+              // 新实体，初始化来源信息
+              node.source_collections = node.metadata?.workspace ? [node.metadata.workspace as string] : [];
+              node.source_documents = node.metadata?.document_id ? [node.metadata.document_id as string] : [];
+              node.val = 1;
+              entityMap.set(entityKey, node);
+            }
+          } else {
+            // Collection 和 Document 节点直接添加
+            nonEntityNodes.push(node);
+          }
+        });
+
+        // 合并去重后的节点
+        const deduplicatedNodes = [...nonEntityNodes, ...Array.from(entityMap.values())];
+
+        // 计算节点度数
+        deduplicatedNodes.forEach((node: GraphNode) => {
+          const degree = links.filter((l: GraphEdge) => {
+            const s = typeof l.source === 'object' ? l.source.id : l.source;
+            const t = typeof l.target === 'object' ? l.target.id : l.target;
+            return s === node.id || t === node.id;
+          }).length;
+          if (node.type !== 'entity') {
+            node.val = Math.max(degree, 2);
+          }
+        });
+
+        setGraphData({ nodes: deduplicatedNodes, links });
+
+        // 🔥 高亮搜索匹配的节点
+        if (!initialLoad && query) {
+          console.log('🔍 Search query:', query);
+          const matchedNodeIds = new Set<string>();
+          const matchedDocIds = new Set<string>();
+          const matchedColIds = new Set<string>();
+
+          deduplicatedNodes.forEach((n: GraphNode) => {
+            // 尝试多个名称字段，确保转换为字符串
+            const nodeName = String(n.name || n.entity_name || n.label || n.id || '').toLowerCase();
+            const queryLower = query.toLowerCase();
+
+            if (nodeName.includes(queryLower)) {
+              console.log('✅ Matched node:', n.id, nodeName);
+              matchedNodeIds.add(n.id);
+
+              if (n.type === 'entity') {
+                links.forEach((l: GraphEdge) => {
+                  const targetId = typeof l.target === 'object' ? l.target.id : l.target;
+                  const sourceId = typeof l.source === 'object' ? l.source.id : l.source;
+
+                  if (targetId === n.id && l.type === 'EXTRACTED_FROM') {
+                    if (sourceId.startsWith('doc_')) matchedDocIds.add(sourceId);
+                  }
+                });
+              } else if (n.type === 'document') {
+                matchedDocIds.add(n.id);
+              }
+            }
+          });
+
+          console.log('🎯 Total matched nodes:', matchedNodeIds.size);
+          console.log('📄 Matched documents:', matchedDocIds.size);
+
+          treeData.forEach(col => {
+            if (col.children?.some(doc => matchedDocIds.has(doc.id))) {
+              matchedColIds.add(col.id);
+              setExpandedTreeIds(prev => {
+                const next = new Set(prev);
+                next.add(col.id);
+                return next;
+              });
+            }
+          });
+
+          setHighlightTreeIds(new Set([...matchedDocIds, ...matchedColIds]));
+          setSearchMatchedNodes(matchedNodeIds);
+          console.log('🌟 Search matched nodes state updated:', matchedNodeIds.size);
+
+          // 🔦 启用聚光灯模式
+          if (matchedNodeIds.size > 0) {
+            const spotlight = new Set(matchedNodeIds);
+            // 添加一跳邻居到聚光灯
+            matchedNodeIds.forEach(id => {
+              const neighbors = getNeighbors(id);
+              neighbors.forEach(n => spotlight.add(n));
+            });
+            setSpotlightNodes(spotlight);
+            setSpotlightMode(true);
+            console.log('🔦 Spotlight mode activated. Spotlight nodes:', spotlight.size);
+          } else {
+            setSpotlightMode(false);
+            setSpotlightNodes(new Set());
+          }
+        } else {
+          setHighlightTreeIds(new Set());
+          setSearchMatchedNodes(new Set());
+          setSpotlightMode(false);
+          setSpotlightNodes(new Set());
+        }
+
+        setTimeout(() => {
+          graphRef.current?.zoomToFit(400);
+        }, 500);
+
+      }
+    } catch (error) {
+      console.error('Search error:', error);
+      toast.error('搜索失败，请重试');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // -- 3. Tree Interaction --
+  const handleTreeSelect = useCallback((node: TreeNode) => {
+    setSelectedTreeId(node.id);
+
+    if (!graphRef.current) return;
+
+    const relatedNodeIds = new Set<string>();
+    relatedNodeIds.add(node.id);
+
+    if (node.type === 'collection') {
+      node.children?.forEach(child => relatedNodeIds.add(child.id));
+
+      graphData.links.forEach(link => {
+        const s = typeof link.source === 'object' ? link.source.id : link.source;
+        const t = typeof link.target === 'object' ? link.target.id : link.target;
+
+        if (relatedNodeIds.has(s as string)) relatedNodeIds.add(t as string);
+        if (relatedNodeIds.has(t as string)) relatedNodeIds.add(s as string);
+      });
+    }
+    else if (node.type === 'document') {
+      graphData.links.forEach(link => {
+        const s = typeof link.source === 'object' ? link.source.id : link.source;
+        const t = typeof link.target === 'object' ? link.target.id : link.target;
+        if (s === node.id) relatedNodeIds.add(t as string);
+      });
+    }
+
+    setHighlightNodes(relatedNodeIds);
+
+    const graphNode = graphData.nodes.find(n => n.id === node.id);
+    if (graphNode && typeof graphNode.x === 'number' && typeof graphNode.y === 'number') {
+      graphRef.current.centerAt(graphNode.x, graphNode.y, 1000);
+      graphRef.current.zoom(4, 2000);
+    }
+
+  }, [graphData, treeData]);
+
+  // -- 4. Context Menu Handlers --
+  const handleNodeRightClick = useCallback((node: any, event: MouseEvent) => {
+    event.preventDefault();
+    setContextMenuNode(node as GraphNode);
+    setContextMenuPos({ x: event.clientX, y: event.clientY });
+  }, []);
+
+  const handleContextMenuAction = useCallback((action: string) => {
+    if (!contextMenuNode) return;
+
+    switch (action) {
+      case 'focus':
+        if (contextMenuNode.x && contextMenuNode.y) {
+          graphRef.current?.centerAt(contextMenuNode.x, contextMenuNode.y, 1000);
+          graphRef.current?.zoom(6, 1000);
+        }
+        break;
+      case 'chat':
+        router.push(`/workspace/chat?q=解释实体"${contextMenuNode.name || contextMenuNode.entity_name}"`);
+        break;
+      case 'expand':
+        const connectedIds = new Set<string>([contextMenuNode.id]);
+        graphData.links.forEach(link => {
+          const s = typeof link.source === 'object' ? link.source.id : link.source;
+          const t = typeof link.target === 'object' ? link.target.id : link.target;
+          if (s === contextMenuNode.id) connectedIds.add(t as string);
+          if (t === contextMenuNode.id) connectedIds.add(s as string);
+        });
+        setHighlightNodes(connectedIds);
+        break;
+      case 'copy':
+        navigator.clipboard.writeText(contextMenuNode.name || contextMenuNode.entity_name || contextMenuNode.id);
+        toast.success('已复制到剪贴板');
+        break;
+      case 'details':
+        setSelectedNode(contextMenuNode);
+        setNodeDetailOpen(true);
+        break;
+    }
+
+    setContextMenuNode(null);
+  }, [contextMenuNode, graphData, router]);
+
+  // -- Resize Handler --
   const handleResize = useCallback(() => {
     if (containerRef.current) {
       setDimensions({
@@ -141,788 +572,563 @@ export function GlobalGraphExplorer() {
   }, []);
 
   useEffect(() => {
-    window.addEventListener('resize', handleResize);
-    // Use setTimeout to ensure container is rendered
-    const timer = setTimeout(() => {
+    const observer = new ResizeObserver(() => {
       handleResize();
-    }, 100);
-    return () => {
-      window.removeEventListener('resize', handleResize);
-      clearTimeout(timer);
-    };
+    });
+    if (containerRef.current) {
+      observer.observe(containerRef.current);
+    }
+    return () => observer.disconnect();
   }, [handleResize]);
 
-  // Define data loading function for reuse
-  const fetchHierarchyData = useCallback(async (searchTerm = '') => {
-    setLoading(true);
-    setHasSearched(true);
-
-    try {
-      const response = await fetch('/api/v1/graphs/hierarchy/global', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          query: searchTerm.trim(),
-          top_k: 100,
-        }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        console.log('Auto-load graph data:', {
-          nodeCount: data.nodes?.length || 0,
-          edgeCount: data.edges?.length || 0,
-          statistics: data.statistics,
-        });
-        const nodes = data.nodes || [];
-        const links = data.edges || [];
-
-        // Calculate node values and reset coordinates for DAG layout
-        nodes.forEach((node: GraphNode) => {
-          if (!node.type) node.type = 'entity';
-          if (!node.description && node.metadata?.description) {
-            node.description = String(node.metadata.description);
-          }
-
-          delete node.x;
-          delete node.y;
-          delete node.vx;
-          delete node.vy;
-          delete node.fx;
-          delete node.fy;
-
-          const degree = links.filter((l: GraphEdge) => {
-            const sourceId =
-              typeof l.source === 'object' ? l.source.id : l.source;
-            const targetId =
-              typeof l.target === 'object' ? l.target.id : l.target;
-            return sourceId === node.id || targetId === node.id;
-          }).length;
-          node.val = Math.max(degree, 5);
-        });
-
-        setGraphData({ nodes, links });
-
-        const collectionIds = nodes
-          .filter((n: GraphNode) => n.type === 'collection')
-          .map((n: GraphNode) => n.id);
-        setExpandedNodes(new Set(collectionIds));
-        console.log(`✓ Auto-expanded ${collectionIds.length} collections`);
-
-        if (graphRef.current) {
-          graphRef.current.d3ReheatSimulation();
-          setTimeout(() => {
-            graphRef.current.zoomToFit(400, 50);
-          }, 500);
-        }
-      } else {
-        console.error('Auto-load failed:', response.status);
-      }
-    } catch (error) {
-      console.error('Auto-load error:', error);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  // Auto-load graph on mount
-  useEffect(() => {
-    fetchHierarchyData();
-  }, [fetchHierarchyData]);
-
-  const handleSearch = async () => {
-    await fetchHierarchyData(query);
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      handleSearch();
-    }
-  };
-
-  // Helper function to navigate to knowledge graph
-  const navigateToGraph = (node: GraphNode) => {
-    if (node.type === 'collection') {
-      const metadataId = getMetadataValue(node, 'collection_id');
-      const fallback = node.id.replace(/^col_/, '');
-      const collectionId = metadataId || fallback;
-      if (collectionId) {
-        router.push(`/workspace/collections/${collectionId}/graph`);
-      }
-      return;
-    }
-
-    if (node.type === 'document') {
-      const collectionId = getMetadataValue(node, 'collection_id');
-      const documentId = getMetadataValue(node, 'document_id');
-      if (collectionId) {
-        const targetUrl = documentId
-          ? `/workspace/collections/${collectionId}/graph?doc=${documentId}`
-          : `/workspace/collections/${collectionId}/graph`;
-        router.push(targetUrl);
-      }
-    }
-  };
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const handleNodeClick = (node: any) => {
-    setContextMenu({ ...contextMenu, open: false }); // Close context menu on left click
-    const currentTime = Date.now();
-    const isDoubleClick =
-      lastClickedNode === node.id && currentTime - lastClickTime < 500;
-
-    setLastClickTime(currentTime);
-    setLastClickedNode(node.id);
-
-    if (isDoubleClick) {
-      if (node.type === 'collection' || node.type === 'document') {
-        navigateToGraph(node);
-        return;
-      }
-    }
-
-    if (node.type === 'collection' || node.type === 'document') {
-      setExpandedNodes((prev) => {
-        const updated = new Set(prev);
-        if (updated.has(node.id)) {
-          updated.delete(node.id);
-        } else {
-          updated.add(node.id);
-        }
-        return updated;
-      });
-    }
-
-    setSelectedNode(node);
-    setNodeDetailOpen(true);
-    const targetX = node.x ?? 0;
-    const targetY = node.y ?? 0;
-    graphRef.current?.centerAt(targetX, targetY, 800);
-    graphRef.current?.centerAt(targetX, targetY, 800);
-    graphRef.current?.zoom(5, 1000);
-  };
-
-  // [ADD] Right Click Handler
-  const handleNodeRightClick = useCallback((node: any, event: MouseEvent) => {
-    setContextMenu({
-      open: true,
-      x: event.clientX,
-      y: event.clientY,
-      node: node
-    });
-  }, []);
-
-  // [ADD] Menu Action Handler
-  const handleMenuAction = useCallback((action: string, node: any) => {
-    setContextMenu(prev => ({ ...prev, open: false }));
-
-    switch (action) {
-      case 'focus':
-        if (node.x && node.y) {
-          graphRef.current?.centerAt(node.x, node.y, 1000);
-          graphRef.current?.zoom(6, 1000);
-        }
-        break;
-      case 'chat':
-        router.push(`/workspace/chat?q=Explain entity "${node.name || node.entity_name}"`);
-        break;
-      case 'source':
-        // Check if we have direct document metadata
-        const docId = node.metadata?.document_id;
-        const colId = node.metadata?.collection_id;
-
-        if (docId && colId) {
-          setSourceViewer({
-            open: true,
-            docId: docId as string,
-            collectionId: colId as string,
-            docName: node.name || 'Document Source'
-          });
-        } else {
-          toast.info("Direct source link not available for this global entity.");
-        }
-        break;
-      case 'expand':
-        // Logic for expanding logic if needed
-        break;
-    }
-  }, [router]);
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const handleNodeHover = (node: any) => {
-    if (node) {
-      setHoveredNode(node);
-      const connectedNodeIds = new Set<string>();
-      const connectedLinkIds = new Set<string>();
-
-      filteredGraphData.links.forEach((link) => {
-        const sourceId =
-          typeof link.source === 'object' ? link.source.id : link.source;
-        const targetId =
-          typeof link.target === 'object' ? link.target.id : link.target;
-
-        if (sourceId === node.id || targetId === node.id) {
-          connectedNodeIds.add(sourceId);
-          connectedNodeIds.add(targetId);
-          connectedLinkIds.add(`${sourceId}-${targetId}`);
-        }
-      });
-
-      setHighlightNodes(connectedNodeIds);
-      setHighlightLinks(connectedLinkIds);
-    } else {
-      setHoveredNode(null);
-      setHighlightNodes(new Set());
-      setHighlightLinks(new Set());
-    }
-  };
+  // -- Render --
 
   const filteredGraphData = useMemo(() => {
-    const { nodes, links } = graphData;
-    const visibleNodes = new Set<string>();
-    const visibleLinks: GraphEdge[] = [];
-
-    nodes
-      .filter((n) => n.type === 'collection')
-      .forEach((n) => visibleNodes.add(n.id));
-
-    nodes
-      .filter((n) => n.type === 'document')
-      .forEach((doc) => {
-        const parentLink = links.find((l) => {
-          const targetId = getNodeId(l.target);
-          return targetId === doc.id && l.type === 'CONTAINS';
-        });
-        const parentSource = parentLink ? getNodeId(parentLink.source) : null;
-        if (parentLink && parentSource && expandedNodes.has(parentSource)) {
-          visibleNodes.add(doc.id);
-        }
-      });
-
-    nodes
-      .filter((n) => n.type === 'entity')
-      .forEach((ent) => {
-        const parentLink = links.find((l) => {
-          const targetId = getNodeId(l.target);
-          return targetId === ent.id && l.type === 'EXTRACTED_FROM';
-        });
-        const parentSource = parentLink ? getNodeId(parentLink.source) : null;
-        if (parentLink && parentSource && expandedNodes.has(parentSource)) {
-          visibleNodes.add(ent.id);
-        }
-      });
-
-    links.forEach((link) => {
-      const sourceId =
-        typeof link.source === 'object'
-          ? (link.source as { id: string }).id
-          : link.source;
-      const targetId =
-        typeof link.target === 'object'
-          ? (link.target as { id: string }).id
-          : link.target;
-      if (visibleNodes.has(sourceId) && visibleNodes.has(targetId)) {
-        visibleLinks.push(link);
-      }
-    });
-
-    return {
-      nodes: nodes.filter((n) => visibleNodes.has(n.id)),
-      links: visibleLinks,
-    };
-  }, [graphData, expandedNodes]);
-
-  useEffect(() => {
-    if (!graphRef.current) return;
-
-    const chargeForce = graphRef.current.d3Force?.('charge') as
-      | d3.ForceManyBody<GraphNode>
-      | undefined;
-    if (chargeForce) {
-      chargeForce.strength(-320);
+    let { nodes, links } = graphData;
+    if (nodeTypeFilter !== 'all') {
+      nodes = nodes.filter((n) => n.type === nodeTypeFilter);
     }
+    return { nodes, links };
+  }, [graphData, nodeTypeFilter]);
 
-    const linkForce = graphRef.current.d3Force?.('link') as
-      | d3.ForceLink<GraphNode, GraphEdge>
-      | undefined;
-    if (linkForce) {
-      linkForce.distance((link) =>
-        link.type === 'CONTAINS' ? 80 : link.type === 'EXTRACTED_FROM' ? 60 : 40,
-      );
-    }
-
-    graphRef.current.d3ReheatSimulation?.();
-  }, [filteredGraphData.nodes.length, filteredGraphData.links.length]);
-
-  const metadataDescription =
-    typeof selectedNode?.metadata?.description === 'string'
-      ? (selectedNode?.metadata?.description as string)
-      : undefined;
-  const selectedDescription =
-    selectedNode?.description || metadataDescription;
-
-  const selectedMetadataEntries =
-    selectedNode?.metadata
-      ? Object.entries(selectedNode.metadata).filter(
-        ([, value]) =>
-          ['string', 'number', 'boolean'].includes(typeof value),
-      )
-      : [];
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const getNodeColor = (node: any) => {
-    return nodeTypeColors[node.type as keyof typeof nodeTypeColors] || '#999';
+  const nodeTypeColors = {
+    collection: '#3b82f6',
+    document: '#10b981',
+    entity: '#f59e0b',
   };
 
   return (
-    <div className="relative flex h-full flex-col gap-4 p-4">
-      {/* Controls */}
-      <div className="absolute top-4 left-4 z-10 flex w-full max-w-md flex-col gap-2">
-        <Card className="flex w-full flex-col gap-2 p-3 shadow-lg">
-          <div className="flex items-center gap-2">
-            <Input
-              type="text"
-              placeholder={
-                t('search_placeholder') ||
-                'Filter collections, documents or entities...'
-              }
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={handleKeyDown}
-              className="flex-1"
-            />
-            <Button
-              onClick={handleSearch}
-              disabled={loading}
-              size="sm"
-              variant="secondary"
-              title="Refresh directory view"
-            >
-              {loading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <RotateCcw className="h-4 w-4" />
-              )}
-              <span className="ml-1">Reload</span>
-            </Button>
-          </div>
+    <div className="flex h-[calc(100vh-4rem)] flex-col bg-background">
+      {/* Top Bar */}
+      <div className="border-b p-4 flex items-center gap-4 bg-card/50 backdrop-blur-sm z-20">
+        <div className="flex-1 max-w-2xl flex items-center gap-2 relative">
+          <Search className="absolute left-3 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder={t('search_placeholder') || "搜索实体、文档或知识库..."}
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleSearch()}
+            className="pl-9 bg-background/80"
+          />
+          <Button onClick={() => handleSearch()} disabled={loading} size="sm">
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "搜索"}
+          </Button>
+        </div>
 
-          {hasSearched && filteredGraphData.nodes.length > 200 && (
-            <div className="flex items-start gap-1 text-xs text-yellow-600 dark:text-yellow-500">
-              <span>⚠️</span>
-              <span>
-                Large graph ({filteredGraphData.nodes.length} nodes).
-                Performance may be affected.
-              </span>
-            </div>
-          )}
-        </Card>
+        <div className="flex items-center gap-4 ml-auto">
+          <div className="flex items-center gap-2">
+            <Switch
+              id="view-mode"
+              checked={hierarchicalView}
+              onCheckedChange={v => {
+                setHierarchicalView(v);
+                handleSearch();
+              }}
+            />
+            <Label htmlFor="view-mode" className="text-xs">层级视图</Label>
+          </div>
+          <Select value={nodeTypeFilter} onValueChange={setNodeTypeFilter}>
+            <SelectTrigger className="w-[120px] h-8 text-xs">
+              <SelectValue placeholder="节点类型" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">全部类型</SelectItem>
+              <SelectItem value="collection">知识库</SelectItem>
+              <SelectItem value="document">文档</SelectItem>
+              <SelectItem value="entity">实体</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
-
-
-      {/* Graph Container */}
-      <div
-        ref={containerRef}
-        className="bg-card flex-1 overflow-hidden rounded-lg border"
-        style={{ minHeight: '400px' }}
-        onContextMenu={(e) => e.preventDefault()} // [ADD] Prevent default menu
-      >
-        {loading ? (
-          <div className="text-muted-foreground flex h-full items-center justify-center">
-            <Loader2 className="mr-2 h-6 w-6 animate-spin" />
-            Loading graph...
-          </div>
-        ) : hasSearched && filteredGraphData.nodes.length === 0 ? (
-          <div className="text-muted-foreground flex h-full flex-col items-center justify-center gap-4">
-            <div className="text-6xl opacity-20">🔍</div>
-            <div className="text-center">
-              <div className="mb-2 text-lg font-semibold">
-                No Data to Display
-              </div>
-              <div className="text-sm">
-                Please create collections and upload documents with knowledge
-                graph enabled.
-              </div>
+      <ResizablePanelGroup direction="horizontal" className="flex-1 overflow-hidden">
+        {/* Left Panel: Directory Tree */}
+        <ResizablePanel defaultSize={20} minSize={15} maxSize={40} className="border-r bg-muted/10">
+          <div className="flex flex-col h-full">
+            <div className="p-3 border-b flex items-center justify-between">
+              <span className="font-semibold text-sm flex items-center gap-2">
+                <Layers className="h-4 w-4" /> 知识库目录
+              </span>
+              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={fetchDirectoryTree}>
+                <RotateCcw className="h-3 w-3" />
+              </Button>
             </div>
+            <ScrollArea className="flex-1 p-2">
+              {treeLoading ? (
+                <div className="flex justify-center py-8 text-muted-foreground">
+                  <Loader2 className="h-6 w-6 animate-spin" />
+                </div>
+              ) : treeData.length === 0 ? (
+                <div className="text-center py-8 text-xs text-muted-foreground">暂无知识库</div>
+              ) : (
+                <div className="space-y-1">
+                  {treeData.map(node => (
+                    <TreeItem
+                      key={node.id}
+                      node={node}
+                      onSelect={handleTreeSelect}
+                      selectedId={selectedTreeId}
+                      expandedIds={expandedTreeIds}
+                      highlightIds={highlightTreeIds}
+                      toggleExpand={(id) => {
+                        setExpandedTreeIds(prev => {
+                          const next = new Set(prev);
+                          if (next.has(id)) next.delete(id);
+                          else next.add(id);
+                          return next;
+                        });
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
+            </ScrollArea>
           </div>
-        ) : !hasSearched ? (
-          <div className="text-muted-foreground flex h-full flex-col items-center justify-center gap-4">
-            <div className="text-6xl opacity-20">📊</div>
-            <div className="text-center">
-              <div className="mb-2 text-lg font-semibold">
-                Global Knowledge Graph
-              </div>
-              <div className="text-sm">Loading hierarchy...</div>
+        </ResizablePanel>
+
+        <ResizableHandle />
+
+        {/* Right Panel: Graph Visualization */}
+        <ResizablePanel defaultSize={80}>
+          <div className="relative w-full h-full" ref={containerRef}>
+            {/* Graph Controls */}
+            <div className="absolute bottom-4 right-4 z-10 flex flex-col gap-2">
+              <Button size="icon" variant="secondary" onClick={() => graphRef.current?.zoomIn()}>
+                <ZoomIn className="h-4 w-4" />
+              </Button>
+              <Button size="icon" variant="secondary" onClick={() => graphRef.current?.zoomOut()}>
+                <ZoomOut className="h-4 w-4" />
+              </Button>
+              <Button size="icon" variant="secondary" onClick={() => graphRef.current?.zoomToFit()}>
+                <Maximize2 className="h-4 w-4" />
+              </Button>
             </div>
-          </div>
-        ) : dimensions.width > 0 && dimensions.height > 0 ? (
-          <ForceGraph2D
-            key="hierarchical-layout"
-            ref={graphRef}
-            width={dimensions.width}
-            height={dimensions.height}
-            graphData={filteredGraphData}
-            nodeLabel={(node: any) => node.name || node.entity_name} // eslint-disable-line @typescript-eslint/no-explicit-any
-            nodeColor={(node: any) => {
-              // eslint-disable-line @typescript-eslint/no-explicit-any
-              if (hoveredNode) {
-                return highlightNodes.has(node.id)
-                  ? getNodeColor(node)
-                  : resolvedTheme === 'dark'
-                    ? '#333'
-                    : '#ddd';
-              }
-              return getNodeColor(node);
-            }}
-            nodeRelSize={8}
-            nodeVal={(node: any) => {
-              // eslint-disable-line @typescript-eslint/no-explicit-any
-              const baseSize =
-                node.type === 'collection'
-                  ? 14
-                  : node.type === 'document'
-                    ? 10
-                    : 6;
-              return hoveredNode?.id === node.id ? baseSize * 1.3 : baseSize;
-            }}
-            linkColor={(link: any) => {
-              // eslint-disable-line @typescript-eslint/no-explicit-any
-              const sourceId =
-                typeof link.source === 'object' ? link.source.id : link.source;
-              const targetId =
-                typeof link.target === 'object' ? link.target.id : link.target;
-              const linkId = `${sourceId}-${targetId}`;
 
-              if (hoveredNode && !highlightLinks.has(linkId)) {
-                return resolvedTheme === 'dark' ? '#222' : '#eee';
-              }
+            {/* Stats Overlay */}
+            {showStats && (
+              <div className="absolute top-4 right-4 z-10">
+                <Card className="p-3 w-48 bg-background/80 backdrop-blur">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-xs font-bold">图谱统计</span>
+                    <X className="h-3 w-3 cursor-pointer hover:text-destructive" onClick={() => setShowStats(false)} />
+                  </div>
+                  <div className="text-xs space-y-1 text-muted-foreground">
+                    <div className="flex justify-between"><span>节点:</span> <span className="font-mono text-foreground">{filteredGraphData.nodes.length}</span></div>
+                    <div className="flex justify-between"><span>连接:</span> <span className="font-mono text-foreground">{filteredGraphData.links.length}</span></div>
+                    {searchMatchedNodes.size > 0 && (
+                      <div className="flex justify-between border-t pt-1 mt-1"><span>匹配:</span> <span className="font-mono text-yellow-600 dark:text-yellow-400">{searchMatchedNodes.size}</span></div>
+                    )}
+                    {spotlightMode && (
+                      <div className="flex justify-between items-center border-t pt-1 mt-1">
+                        <span className="flex items-center gap-1">
+                          🔦 聚光灯
+                        </span>
+                        <span className="font-mono text-blue-600 dark:text-blue-400">{spotlightNodes.size}</span>
+                      </div>
+                    )}
+                  </div>
+                </Card>
+              </div>
+            )}
 
-              if (link.type === 'federation') return '#FFA500';
-              if (link.type === 'CONTAINS') return '#3b82f6';
-              if (link.type === 'EXTRACTED_FROM') return '#10b981';
-              return resolvedTheme === 'dark' ? '#555' : '#999';
-            }}
-            linkLineDash={(
-              link: any, // eslint-disable-line @typescript-eslint/no-explicit-any
-            ) => (link.type === 'federation' ? [4, 2] : null)}
-            linkWidth={(link: any) => {
-              // eslint-disable-line @typescript-eslint/no-explicit-any
-              const sourceId =
-                typeof link.source === 'object' ? link.source.id : link.source;
-              const targetId =
-                typeof link.target === 'object' ? link.target.id : link.target;
-              const linkId = `${sourceId}-${targetId}`;
-              const baseWidth = link.type === 'federation' ? 2 : 1;
-              return hoveredNode && highlightLinks.has(linkId)
-                ? baseWidth * 2
-                : baseWidth;
-            }}
-            linkDirectionalParticles={(
-              link: any, // eslint-disable-line @typescript-eslint/no-explicit-any
-            ) => (link.type === 'federation' ? 2 : 0)}
-            linkDirectionalParticleSpeed={0.005}
-            linkDirectionalParticleWidth={(link: any) => {
-              // eslint-disable-line @typescript-eslint/no-explicit-any
-              const sourceId =
-                typeof link.source === 'object' ? link.source.id : link.source;
-              const targetId =
-                typeof link.target === 'object' ? link.target.id : link.target;
-              const linkId = `${sourceId}-${targetId}`;
-              return hoveredNode && highlightLinks.has(linkId) ? 4 : 2;
-            }}
-            backgroundColor={resolvedTheme === 'dark' ? '#020817' : '#ffffff'}
-            onNodeClick={handleNodeClick}
-            onNodeRightClick={handleNodeRightClick}
-            onNodeHover={handleNodeHover}
-            dagMode={hierarchicalView ? 'td' : undefined}
-            dagLevelDistance={hierarchicalView ? 120 : undefined}
-            cooldownTicks={100}
-            d3AlphaDecay={0.01}
-            d3VelocityDecay={0.3}
-            warmupTicks={50}
-            nodeCanvasObject={(node: any, ctx: any, globalScale: number) => {
-              // eslint-disable-line @typescript-eslint/no-explicit-any
-              const label = node.name || node.entity_name || '';
-              const x = node.x ?? 0;
-              const y = node.y ?? 0;
-              const nodeType = (node.type || 'entity') as GraphNode['type'];
-              const isHovered = hoveredNode?.id === node.id;
-              const isHighlighted = highlightNodes.has(node.id);
+            {dimensions.width > 0 && (
+              <ForceGraph2D
+                ref={graphRef}
+                width={dimensions.width}
+                height={dimensions.height}
+                graphData={filteredGraphData}
+                nodeLabel={(node: any) => {
+                  const name = node.name || node.entity_name || '';
+                  const sources = node.source_collections?.length > 0
+                    ? `\n来源: ${node.source_collections.join(', ')}`
+                    : '';
+                  return name + sources;
+                }}
+                nodeColor={(node: any) => {
+                  // 搜索匹配的节点高亮显示
+                  if (searchMatchedNodes.has(node.id)) {
+                    return '#fbbf24'; // 黄色高亮
+                  }
+                  if (highlightNodes.size > 0 && !highlightNodes.has(node.id)) {
+                    return resolvedTheme === 'dark' ? '#333' : '#eee';
+                  }
+                  return nodeTypeColors[node.type as keyof typeof nodeTypeColors] || '#999';
+                }}
+                nodeRelSize={6}
+                linkColor={(link: any) => {
+                  const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
+                  const targetId = typeof link.target === 'object' ? link.target.id : link.target;
 
-              // [MOD] Spotlight Opacity Logic
-              // If any node is hovered/highlighted, dim others significantly
-              const hasActiveState = hoveredNode !== null;
-              const opacity = hasActiveState && !isHovered && !isHighlighted ? 0.1 : 1;
+                  // 高亮搜索匹配节点的连接
+                  if (searchMatchedNodes.has(sourceId) || searchMatchedNodes.has(targetId)) {
+                    return '#fbbf24';
+                  }
+                  return resolvedTheme === 'dark' ? '#ffffff20' : '#00000020';
+                }}
+                linkWidth={(link: any) => {
+                  const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
+                  const targetId = typeof link.target === 'object' ? link.target.id : link.target;
 
-              ctx.globalAlpha = opacity;
-              const isDimmed = false; // We use globalAlpha instead of color dimming now
+                  // 高亮搜索匹配节点的连接
+                  if (searchMatchedNodes.has(sourceId) || searchMatchedNodes.has(targetId)) {
+                    return 2;
+                  }
+                  return 1;
+                }}
+                backgroundColor={resolvedTheme === 'dark' ? '#020817' : '#ffffff'}
+                onNodeClick={(node) => {
+                  const graphNode = node as GraphNode;
+                  // 打开原文预览面板
+                  setSourceViewerData({
+                    nodeId: graphNode.id,
+                    nodeName: graphNode.name || graphNode.entity_name || graphNode.id,
+                    nodeType: graphNode.type,
+                    metadata: graphNode.metadata,
+                  });
+                  setSourceViewerOpen(true);
 
-              const baseSize =
-                nodeType === 'collection'
-                  ? 16
-                  : nodeType === 'document'
-                    ? 12
-                    : 7;
-              const size = isHovered ? baseSize * 1.2 : baseSize;
-              const fillColor = getNodeColor(node);
+                  // 同时保留详情对话框功能（可选）
+                  // setSelectedNode(graphNode);
+                  // setNodeDetailOpen(true);
+                }}
+                onNodeRightClick={handleNodeRightClick}
+                nodeCanvasObject={(node: any, ctx, globalScale) => {
+                  // 🔍 尝试多个可能的名称字段
+                  const label = node.name ||
+                    node.entity_name ||
+                    node.label ||
+                    node.title ||
+                    node.description ||
+                    node.id ||
+                    'Unknown';
 
-              ctx.save();
-              ctx.translate(x, y);
-              ctx.fillStyle = fillColor;
-              ctx.strokeStyle =
-                resolvedTheme === 'dark' ? 'rgba(255,255,255,0.15)' : '#ffffff';
-              ctx.lineWidth = isHovered ? 2 : 1;
-
-              ctx.beginPath();
-              if (nodeType === 'collection') {
-                ctx.rect(-size * 0.8, -size * 0.8, size * 1.6, size * 1.6);
-                ctx.fill();
-                ctx.stroke();
-              } else if (nodeType === 'document') {
-                ctx.moveTo(0, -size);
-                ctx.lineTo(size, size);
-                ctx.lineTo(-size, size);
-                ctx.closePath();
-                ctx.fill();
-              } else {
-                ctx.arc(0, 0, size * 0.6, 0, 2 * Math.PI);
-                ctx.fill();
-              }
-              ctx.restore();
-
-              const shouldShowLabel =
-                nodeType === 'collection' || isHovered || globalScale > 1.2;
-              const fontSize = Math.max(12 / globalScale, 3);
-
-              if (shouldShowLabel && label) {
-                ctx.font = `${isHovered ? 'bold ' : ''}${fontSize}px Sans-Serif`;
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'top';
-
-                const textWidth = ctx.measureText(label).width;
-                const padding = 4;
-                let labelY = y + size + 6; // Use let because it might be updated
-
-                ctx.fillStyle =
-                  resolvedTheme === 'dark'
-                    ? 'rgba(0,0,0,0.75)'
-                    : 'rgba(255,255,255,0.9)';
-                ctx.fillRect(
-                  x - textWidth / 2 - padding,
-                  labelY - 2,
-                  textWidth + padding * 2,
-                  fontSize + 6,
-                );
-
-                ctx.fillStyle = resolvedTheme === 'dark' ? '#fff' : '#000';
-                ctx.fillText(label, x, labelY);
-
-                // [ADD] Render Source Workspace Info
-                // Show source if it's an entity and we are hovered or zoomed in enough
-                if (nodeType === 'entity' && (isHovered || globalScale > 1.5)) {
-                  const workspace = node.metadata?.workspace as string | undefined;
-                  const sourceCollections = node.source_collections as string[] | undefined;
-
-                  let sourceLabel = '';
-                  if (sourceCollections && sourceCollections.length > 0) {
-                    // If multiple sources, show count or list first few
-                    sourceLabel = sourceCollections.length > 1
-                      ? `${sourceCollections.length} sources`
-                      : sourceCollections[0];
-                  } else if (workspace) {
-                    sourceLabel = workspace;
+                  // 调试：第一次渲染时打印节点结构
+                  if (!(window as any)._nodeLogged && node.id) {
+                    console.log('📊 Sample node structure:', {
+                      id: node.id,
+                      type: node.type,
+                      name: node.name,
+                      entity_name: node.entity_name,
+                      label: node.label,
+                      title: node.title,
+                      allKeys: Object.keys(node),
+                    });
+                    (window as any)._nodeLogged = true;
                   }
 
-                  if (sourceLabel) {
-                    const sourceFontSize = fontSize * 0.85;
-                    ctx.font = `italic ${sourceFontSize}px Sans-Serif`;
-                    const sourceY = labelY + fontSize + 4;
+                  const fontSize = 12 / globalScale;
+                  const isHighlighted = highlightNodes.has(node.id);
+                  const isSearchMatched = searchMatchedNodes.has(node.id);
 
-                    // Draw source background (optional, but helps readability)
-                    const sourceWidth = ctx.measureText(sourceLabel).width;
+                  // 🔦 聚光灯模式透明度控制
+                  if (spotlightMode) {
+                    const isInSpotlight = spotlightNodes.has(node.id);
+                    if (isSearchMatched) {
+                      ctx.globalAlpha = 1.0;  // 搜索匹配：完全不透明
+                    } else if (isInSpotlight) {
+                      ctx.globalAlpha = 0.7;  // 一跳邻居：较明显
+                    } else {
+                      ctx.globalAlpha = 0.4;  // 其他节点：可见但淡化
+                    }
+                  } else {
+                    ctx.globalAlpha = 1.0;
+                  }
+
+                  // 节点大小：搜索匹配 > 高亮 > 普通
+                  let size = 5;
+                  if (isSearchMatched) size = 10;
+                  else if (isHighlighted) size = 8;
+                  else if (node.val) size = Math.min(node.val * 2, 12);
+
+                  ctx.beginPath();
+                  ctx.arc(node.x, node.y, size, 0, 2 * Math.PI, false);
+
+                  // 颜色逻辑
+                  if (isSearchMatched) {
+                    ctx.fillStyle = '#fbbf24'; // 黄色
+                  } else if (highlightNodes.size > 0 && !isHighlighted) {
+                    ctx.fillStyle = resolvedTheme === 'dark' ? '#333' : '#e5e7eb';
+                  } else {
+                    ctx.fillStyle = nodeTypeColors[node.type as keyof typeof nodeTypeColors] || '#999';
+                  }
+
+                  ctx.fill();
+
+                  // 边框
+                  if (isSearchMatched || isHighlighted) {
+                    ctx.strokeStyle = isSearchMatched ? '#f59e0b' : (resolvedTheme === 'dark' ? '#fff' : '#000');
+                    ctx.lineWidth = 2 / globalScale;
+                    ctx.stroke();
+                  }
+
+                  // 🔥 优化标签显示逻辑
+                  // 选项1: 强制显示所有标签（调试模式）
+                  // 选项2: 智能显示（重要节点 + 搜索匹配 + 高亮 + 缩放）
+                  const isImportantNode = node.type === 'collection' || node.type === 'document';
+                  const shouldShowLabel = showAllLabels ||
+                    isImportantNode ||
+                    isSearchMatched ||
+                    isHighlighted ||
+                    globalScale > 0.3;
+
+                  if (shouldShowLabel && label && label !== 'Unknown') {
+                    ctx.font = `${isSearchMatched ? 'bold ' : ''}${fontSize}px Sans-Serif`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'top';
+
+                    const textWidth = ctx.measureText(label).width;
+                    const padding = 4;
+                    const labelY = node.y + size + 4;
+
+                    // 文字背景
                     ctx.fillStyle = resolvedTheme === 'dark'
-                      ? 'rgba(0,0,0,0.6)'
-                      : 'rgba(255,255,255,0.8)';
+                      ? 'rgba(0,0,0,0.75)'
+                      : 'rgba(255,255,255,0.9)';
                     ctx.fillRect(
-                      x - sourceWidth / 2 - 2,
-                      sourceY - 1,
-                      sourceWidth + 4,
-                      sourceFontSize + 2
+                      node.x - textWidth / 2 - padding,
+                      labelY - 2,
+                      textWidth + padding * 2,
+                      fontSize + 6,
                     );
 
-                    ctx.fillStyle = resolvedTheme === 'dark' ? '#aaa' : '#666';
-                    ctx.fillText(sourceLabel, x, sourceY);
+                    // 文字
+                    ctx.fillStyle = isSearchMatched
+                      ? '#f59e0b'
+                      : (resolvedTheme === 'dark' ? '#fff' : '#000');
+                    ctx.fillText(label, node.x, labelY);
+
+                    // 🔥 显示多来源标记
+                    if (node.type === 'entity' && node.source_collections?.length > 1) {
+                      const sourceLabel = `${node.source_collections.length} 个来源`;
+                      const sourceFontSize = fontSize * 0.75;
+                      ctx.font = `italic ${sourceFontSize}px Sans-Serif`;
+                      const sourceY = labelY + fontSize + 4;
+
+                      const sourceWidth = ctx.measureText(sourceLabel).width;
+                      ctx.fillStyle = resolvedTheme === 'dark'
+                        ? 'rgba(0,0,0,0.6)'
+                        : 'rgba(255,255,255,0.8)';
+                      ctx.fillRect(
+                        node.x - sourceWidth / 2 - 2,
+                        sourceY - 1,
+                        sourceWidth + 4,
+                        sourceFontSize + 2
+                      );
+
+                      ctx.fillStyle = '#3b82f6'; // 蓝色表示多来源
+                      ctx.fillText(sourceLabel, node.x, sourceY);
+                    }
                   }
-                }
-              }
 
-              if (nodeType === 'collection' || nodeType === 'document') {
-                const indicatorRadius = Math.max(6 / globalScale, 3);
-                const indicatorX = x;
-                const indicatorY = y - size - indicatorRadius - 2;
-                const isExpanded = expandedNodes.has(node.id);
-
-                ctx.beginPath();
-                ctx.fillStyle =
-                  resolvedTheme === 'dark' ? '#0f172a' : 'rgba(255,255,255,0.95)';
-                ctx.strokeStyle = fillColor;
-                ctx.lineWidth = 1;
-                ctx.arc(indicatorX, indicatorY, indicatorRadius, 0, 2 * Math.PI);
-                ctx.fill();
-                ctx.stroke();
-
-                ctx.fillStyle = fillColor;
-                ctx.font = `bold ${Math.max(10 / globalScale, 3)}px Sans-Serif`;
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                ctx.fillText(isExpanded ? '−' : '+', indicatorX, indicatorY);
-              }
-
-              // Restore alpha
-              ctx.globalAlpha = 1.0;
-            }}
-          />
-        ) : (
-          <div className="text-muted-foreground flex h-full items-center justify-center">
-            Initializing graph...
+                  // 恢复透明度
+                  ctx.globalAlpha = 1.0;
+                }}
+              />
+            )}
           </div>
+        </ResizablePanel>
+
+        {/* Right Panel: Source Viewer (Conditional) */}
+        {sourceViewerOpen && (
+          <>
+            <ResizableHandle />
+            <ResizablePanel defaultSize={30} minSize={20} maxSize={40} className="border-l bg-muted/5">
+              <div className="flex flex-col h-full">
+                {/* Header */}
+                <div className="p-3 border-b flex items-center justify-between bg-card">
+                  <span className="font-semibold text-sm flex items-center gap-2">
+                    <FileText className="h-4 w-4" />
+                    原文预览
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6"
+                    onClick={() => setSourceViewerOpen(false)}
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
+
+                {/* Content */}
+                <ScrollArea className="flex-1 p-4">
+                  {sourceViewerData ? (
+                    <div className="space-y-4">
+                      {/* Node Info */}
+                      <div>
+                        <div className="text-xs text-muted-foreground mb-1">节点信息</div>
+                        <Card className="p-3">
+                          <div className="space-y-2 text-sm">
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">类型:</span>
+                              <Badge variant="outline">{sourceViewerData.nodeType}</Badge>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">名称:</span>
+                              <span className="font-medium">{sourceViewerData.nodeName}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">ID:</span>
+                              <span className="font-mono text-xs">{sourceViewerData.nodeId}</span>
+                            </div>
+                          </div>
+                        </Card>
+                      </div>
+
+                      {/* Metadata */}
+                      {sourceViewerData.metadata && (
+                        <div>
+                          <div className="text-xs text-muted-foreground mb-1">元数据</div>
+                          <Card className="p-3">
+                            <pre className="text-xs overflow-auto max-h-60 whitespace-pre-wrap">
+                              {JSON.stringify(sourceViewerData.metadata, null, 2)}
+                            </pre>
+                          </Card>
+                        </div>
+                      )}
+
+                      {/* Source Document (Placeholder) */}
+                      <div>
+                        <div className="text-xs text-muted-foreground mb-1">来源文档</div>
+                        <Card className="p-3">
+                          <div className="text-sm text-muted-foreground">
+                            {sourceViewerData.nodeType === 'entity' ? (
+                              <div>
+                                <p className="mb-2">该实体提取自以下文档：</p>
+                                <div className="space-y-1">
+                                  {sourceViewerData.metadata?.document_id && (
+                                    <div className="flex items-center gap-2 p-2 bg-muted/50 rounded">
+                                      <FileText className="h-3 w-3" />
+                                      <span className="text-xs font-mono">
+                                        {sourceViewerData.metadata.document_id}
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
+                                <p className="mt-3 text-xs italic">
+                                  💡 提示：点击文档可查看原文内容
+                                </p>
+                              </div>
+                            ) : (
+                              <p>选择一个实体节点以查看其来源文档</p>
+                            )}
+                          </div>
+                        </Card>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
+                      点击节点查看详情
+                    </div>
+                  )}
+                </ScrollArea>
+              </div>
+            </ResizablePanel>
+          </>
         )}
-      </div>
+      </ResizablePanelGroup>
 
-      {/* [ADD] Graph Components */}
-      <GraphContextMenu
-        open={contextMenu.open}
-        position={{ x: contextMenu.x, y: contextMenu.y }}
-        node={contextMenu.node}
-        onClose={() => setContextMenu(prev => ({ ...prev, open: false }))}
-        onAction={handleMenuAction}
-      />
-
-      {sourceViewer.open && (
-        <div className="absolute top-0 right-0 bottom-0 w-[400px] z-20 shadow-2xl border-l border-border/50 animate-in slide-in-from-right duration-300 bg-background">
-          <GraphSourceViewer
-            collectionId={sourceViewer.collectionId}
-            documentId={sourceViewer.docId}
-            documentName={sourceViewer.docName}
-            highlightText={sourceViewer.highlight}
-            onClose={() => setSourceViewer(prev => ({ ...prev, open: false }))}
-          />
+      {/* Context Menu */}
+      {contextMenuNode && (
+        <div
+          className="fixed z-50 min-w-[200px] rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
+          style={{ left: contextMenuPos.x, top: contextMenuPos.y }}
+          onMouseLeave={() => setContextMenuNode(null)}
+        >
+          <div className="px-2 py-1.5 text-sm font-semibold border-b mb-1">
+            {contextMenuNode.name || contextMenuNode.entity_name}
+          </div>
+          <button
+            className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent"
+            onClick={() => handleContextMenuAction('focus')}
+          >
+            <Focus className="h-4 w-4" />
+            聚焦节点
+          </button>
+          <button
+            className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent"
+            onClick={() => handleContextMenuAction('expand')}
+          >
+            <Eye className="h-4 w-4" />
+            显示关联
+          </button>
+          <button
+            className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent"
+            onClick={() => handleContextMenuAction('chat')}
+          >
+            <MessageSquare className="h-4 w-4" />
+            AI 对话
+          </button>
+          <button
+            className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent"
+            onClick={() => handleContextMenuAction('copy')}
+          >
+            <Copy className="h-4 w-4" />
+            复制名称
+          </button>
+          <div className="border-t my-1" />
+          <button
+            className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent"
+            onClick={() => handleContextMenuAction('details')}
+          >
+            <ExternalLink className="h-4 w-4" />
+            查看详情
+          </button>
         </div>
       )}
 
       {/* Node Detail Dialog */}
       <Dialog open={nodeDetailOpen} onOpenChange={setNodeDetailOpen}>
-        <DialogContent className="max-h-[80vh] max-w-2xl overflow-y-auto">
+        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-lg">
-              {selectedNode?.type === 'collection' && (
-                <Folder className="h-5 w-5 text-blue-500" />
-              )}
-              {selectedNode?.type === 'document' && (
-                <FileText className="h-5 w-5 text-emerald-500" />
-              )}
-              {selectedNode?.type === 'entity' && (
-                <Network className="h-5 w-5 text-amber-500" />
-              )}
-              <span>{selectedNode?.name || selectedNode?.entity_name}</span>
+            <DialogTitle className="flex items-center gap-2">
+              {selectedNode?.type === 'collection' && <Database className="h-4 w-4" />}
+              {selectedNode?.type === 'document' && <FileText className="h-4 w-4" />}
+              {selectedNode?.name || selectedNode?.entity_name}
             </DialogTitle>
             <DialogDescription>
-              {selectedNode?.type && (
-                <Badge variant="secondary" className="mt-2 capitalize">
-                  {selectedNode.type}
+              <Badge variant="outline">{selectedNode?.type}</Badge>
+              {selectedNode?.source_collections && selectedNode.source_collections.length > 1 && (
+                <Badge variant="secondary" className="ml-2">
+                  {selectedNode.source_collections.length} 个来源
                 </Badge>
               )}
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            {(selectedNode?.type === 'collection' ||
-              selectedNode?.type === 'document') && (
-                <div className="border-primary/20 bg-primary/5 rounded-lg border p-4">
-                  <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-primary">
-                    🚀 Quick Navigation
-                  </div>
-                  <Button
-                    onClick={() => selectedNode && navigateToGraph(selectedNode)}
-                    className="w-full gap-2"
-                    size="default"
-                  >
-                    <ExternalLink className="h-4 w-4" />
-                    Enter{' '}
-                    {selectedNode.type === 'collection'
-                      ? 'Collection'
-                      : 'Document'}{' '}
-                    Graph
-                  </Button>
-                  <p className="text-muted-foreground mt-3 text-xs">
-                    {selectedNode.type === 'collection'
-                      ? 'Explore every entity and relationship inside this knowledge base.'
-                      : 'Jump directly into the graph generated from this document.'}
-                  </p>
-                </div>
-              )}
-
-            {selectedDescription && (
+          <div className="space-y-4 text-sm mt-2">
+            {selectedNode?.description && (
               <div>
-                <div className="mb-1 text-sm font-semibold">Description</div>
-                <p className="text-muted-foreground text-sm">
-                  {selectedDescription}
-                </p>
+                <div className="font-semibold mb-1">描述</div>
+                <div className="text-muted-foreground">{selectedNode.description}</div>
               </div>
             )}
 
-            {selectedMetadataEntries.length > 0 && (
+            {/* 🔥 显示多来源信息 */}
+            {selectedNode?.source_collections && selectedNode.source_collections.length > 0 && (
               <div>
-                <div className="mb-1 text-sm font-semibold">Metadata</div>
-                <div className="grid gap-1 rounded-md border p-2 text-xs">
-                  {selectedMetadataEntries.map(([key, value]) => (
-                    <div
-                      key={key}
-                      className="flex items-center justify-between gap-2"
-                    >
-                      <span className="text-muted-foreground capitalize">
-                        {key.replace(/_/g, ' ')}
-                      </span>
-                      <span className="font-medium">{String(value)}</span>
-                    </div>
+                <div className="font-semibold mb-1">来源知识库</div>
+                <div className="flex flex-wrap gap-2">
+                  {selectedNode.source_collections.map((col, idx) => (
+                    <Badge key={idx} variant="secondary">{col}</Badge>
                   ))}
                 </div>
               </div>
             )}
 
-            {selectedNode?.workspace && (
+            {selectedNode?.metadata && (
               <div>
-                <div className="mb-1 text-sm font-semibold">Workspace</div>
-                <div className="text-muted-foreground text-sm">
-                  {selectedNode.workspace}
-                </div>
+                <div className="font-semibold mb-1">元数据</div>
+                <pre className="bg-muted p-2 rounded text-xs overflow-auto max-h-40">
+                  {JSON.stringify(selectedNode.metadata, null, 2)}
+                </pre>
               </div>
             )}
 
-            <div>
-              <div className="mb-1 text-sm font-semibold">Connections</div>
-              <div className="text-muted-foreground text-sm">
-                {
-                  filteredGraphData.links.filter((link) => {
-                    const sourceId =
-                      typeof link.source === 'object'
-                        ? (link.source as { id: string }).id
-                        : link.source;
-                    const targetId =
-                      typeof link.target === 'object'
-                        ? (link.target as { id: string }).id
-                        : link.target;
-                    return (
-                      sourceId === selectedNode?.id ||
-                      targetId === selectedNode?.id
-                    );
-                  }).length
-                }{' '}
-                connections
-              </div>
-            </div>
+            {selectedNode?.type === 'collection' && (
+              <Button className="w-full" variant="outline" onClick={() => router.push(`/workspace/collections/${selectedNode.metadata?.collection_id || selectedNode.id.replace('col_', '')}/graph`)}>
+                <ExternalLink className="h-4 w-4 mr-2" /> 打开知识库图谱
+              </Button>
+            )}
           </div>
         </DialogContent>
       </Dialog>

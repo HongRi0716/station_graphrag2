@@ -8,6 +8,9 @@ from typing import Any, Dict, List, Optional, TYPE_CHECKING
 from aperag.schema.view_models import (
     GlobalEvidence,
     GraphData,
+    GraphDirectoryCollection,
+    GraphDirectoryDocument,
+    GraphDirectoryResponse,
     GraphHierarchyEdge,
     GraphHierarchyNode,
 )
@@ -17,6 +20,14 @@ from aperag.service.document_service import DocumentService, document_service
 # SearchService import not needed; using Any for type hint
 
 logger = logging.getLogger(__name__)
+
+
+def _status_value(raw_status: Any) -> str:
+    if raw_status is None:
+        return ""
+    if isinstance(raw_status, str):
+        return raw_status
+    return getattr(raw_status, "value", str(raw_status))
 
 
 class GlobalGraphService:
@@ -42,6 +53,7 @@ class GlobalGraphService:
         top_k: int = 50,
         docs_per_collection: int = 10,
         query: Optional[str] = None,
+        include_entities: bool = True,
     ) -> GraphData:
         """
         获取全局层级结构数据 (Collection -> Document)。
@@ -56,13 +68,6 @@ class GlobalGraphService:
         if not collections:
             return GraphData()
 
-        def _status_value(raw_status: Any) -> str:
-            if raw_status is None:
-                return ""
-            if isinstance(raw_status, str):
-                return raw_status
-            return getattr(raw_status, "value", str(raw_status))
-
         normalized_query = (query or "").strip().lower()
 
         active_collections = [
@@ -71,9 +76,9 @@ class GlobalGraphService:
             if _status_value(getattr(col, "status", "")).upper() == "ACTIVE"
         ]
 
-        # 如果有搜索词，尝试进行全局实体搜索
+        # 如果有搜索词，尝试进行全局实体搜索（可选）
         entity_matched_doc_ids = set()
-        if normalized_query:
+        if normalized_query and include_entities:
             entity_matched_doc_ids = await self._search_entities_globally(
                 user_id=user_id,
                 collections=active_collections,
@@ -203,10 +208,11 @@ class GlobalGraphService:
         edge_type_counter = Counter(edge.type for edge in edges)
 
         logger.info(
-            "Hierarchy built for user %s with %s nodes and %s edges (entity search: %s matches)",
+            "Hierarchy built for user %s with %s nodes and %s edges (entity search enabled=%s, matches=%s)",
             user_id,
             len(nodes),
             len(edges),
+            include_entities and bool(normalized_query),
             len(entity_matched_doc_ids),
         )
 
@@ -220,6 +226,115 @@ class GlobalGraphService:
                 "edge_types": dict(edge_type_counter),
                 "entity_matches": len(entity_matched_doc_ids),
             },
+        )
+
+    async def get_directory_tree(
+        self,
+        user_id: str,
+        query: Optional[str] = None,
+        include_empty: bool = True,
+    ) -> GraphDirectoryResponse:
+        """
+        Return a lightweight Collection -> Document directory for the Global Graph Explorer sidebar.
+        """
+        if not user_id:
+            raise ValueError("user_id is required to fetch directory data")
+
+        collections = await self.collection_service.get_all_collections(user_id)
+        if not collections:
+            return GraphDirectoryResponse()
+
+        normalized_query = (query or "").strip().lower()
+        active_collections = [
+            col for col in collections if _status_value(getattr(col, "status", "")).upper() != "DELETED"
+        ]
+
+        collection_ids = [str(col.id) for col in active_collections if col.id]
+        documents_by_collection = await self.document_service.get_documents_by_collection_ids(
+            user_id=user_id,
+            collection_ids=collection_ids,
+        )
+
+        directory_collections: List[GraphDirectoryCollection] = []
+        total_documents = 0
+
+        def _doc_sort_key(doc: Any) -> float:
+            dt = getattr(doc, "gmt_updated", None) or getattr(doc, "gmt_created", None)
+            if hasattr(dt, "timestamp"):
+                try:
+                    return float(dt.timestamp())
+                except Exception:
+                    return 0.0
+            return 0.0
+
+        for col in active_collections:
+            col_id = str(col.id)
+            docs = documents_by_collection.get(col_id, [])
+            collection_matches = False
+            if normalized_query:
+                search_blob = " ".join(
+                    filter(
+                        None,
+                        [
+                            getattr(col, "title", "") or "",
+                            getattr(col, "description", "") or "",
+                            col_id,
+                        ],
+                    )
+                ).lower()
+                collection_matches = normalized_query in search_blob
+
+            if normalized_query:
+                if collection_matches:
+                    filtered_docs = docs
+                else:
+                    filtered_docs = [
+                        doc for doc in docs if normalized_query in (getattr(doc, "name", "") or "").lower()
+                    ]
+                if not collection_matches and not filtered_docs:
+                    continue
+            else:
+                filtered_docs = docs
+
+            if not include_empty and not docs:
+                continue
+
+            sorted_docs = sorted(filtered_docs, key=_doc_sort_key, reverse=True)
+
+            documents_payload = [
+                GraphDirectoryDocument(
+                    id=str(doc.id),
+                    name=getattr(doc, "name", "") or getattr(doc, "title", "") or "Untitled Document",
+                    collection_id=col_id,
+                    status=_status_value(getattr(doc, "status", "")),
+                    size=getattr(doc, "size", None),
+                    created_at=getattr(doc, "gmt_created", None),
+                    updated_at=getattr(doc, "gmt_updated", None),
+                    metadata={
+                        "graph_index_status": getattr(doc, "graph_index_status", None),
+                        "vector_index_status": getattr(doc, "vector_index_status", None),
+                    },
+                )
+                for doc in sorted_docs
+            ]
+
+            total_documents += len(documents_payload)
+
+            directory_collections.append(
+                GraphDirectoryCollection(
+                    id=col_id,
+                    title=getattr(col, "title", None) or col_id,
+                    description=getattr(col, "description", None),
+                    status=_status_value(getattr(col, "status", "")),
+                    document_count=len(docs),
+                    documents=documents_payload,
+                )
+            )
+
+        return GraphDirectoryResponse(
+            collections=directory_collections,
+            total_collections=len(directory_collections),
+            total_documents=total_documents,
         )
 
     async def _search_entities_globally(
@@ -511,8 +626,11 @@ class GlobalGraphService:
 
         logger.info(f"Starting federated graph structure search for query: {query}")
 
+        user_id = str(getattr(user, "id", user))
+        normalized_query = (query or "").strip().lower()
+
         # 1. 获取所有 Collection
-        collections = await async_db_ops.query_collections([str(user.id)])
+        collections = await async_db_ops.query_collections([user_id])
 
         active_collections = []
         for col in collections:
@@ -532,7 +650,17 @@ class GlobalGraphService:
                 logger.debug(f"Skipping collection {col.id} due to config error: {e}")
 
         if not active_collections:
-            return {"nodes": [], "edges": []}
+            return {"nodes": [], "edges": [], "matches": {"collections": [], "documents": [], "entities": []}}
+
+        collection_lookup = {str(col.id): col for col in active_collections}
+
+        def _normalize_document_id(raw_value: Any) -> Optional[str]:
+            if not raw_value:
+                return None
+            if isinstance(raw_value, str):
+                parts = raw_value.split("/")
+                return parts[-1] if parts else raw_value
+            return str(raw_value)
 
         # 2. 并发执行子图查询
         # 限制并发数防止数据库过载
@@ -562,6 +690,9 @@ class GlobalGraphService:
                         # 优化：批量获取或并行获取
                         for entity_data in similar_entities:
                             e_name = entity_data['entity_name']
+                            doc_ref = _normalize_document_id(
+                                entity_data.get('document_id') or entity_data.get('source_id')
+                            )
                             
                             # 添加中心节点
                             # 使用 entity_name 作为 ID，允许前端自动合并
@@ -574,8 +705,12 @@ class GlobalGraphService:
                                 "metadata": {
                                     "workspace": collection.title, # Show collection name
                                     "collection_id": str(collection.id),
+                                    "collection_name": collection.title,
                                     "description": entity_data.get('content', '')[:100] + "...",
-                                    "source_id": entity_data.get('source_id')
+                                    "source_id": entity_data.get('source_id'),
+                                    "document_id": doc_ref,
+                                    "match_score": entity_data.get('distance'),
+                                    "match_type": "entity",
                                 }
                             }
 
@@ -598,7 +733,25 @@ class GlobalGraphService:
                                         if src not in nodes_map:
                                             nodes_map[src] = {"id": src, "label": src, "type": "entity", "metadata": {"workspace": collection.title}}
                                         if tgt not in nodes_map:
-                                            nodes_map[tgt] = {"id": tgt, "label": tgt, "type": "entity", "metadata": {"workspace": collection.title}}
+                                            nodes_map[tgt] = {
+                                                "id": tgt,
+                                                "label": tgt,
+                                                "type": "entity",
+                                                "metadata": {"workspace": collection.title, "collection_id": str(collection.id)},
+                                            }
+
+                            if doc_ref:
+                                doc_edge_id = f"doc_{doc_ref}_{e_name}_match"
+                                edges_list.append(
+                                    {
+                                        "source": f"doc_{doc_ref}",
+                                        "target": e_name,
+                                        "id": doc_edge_id,
+                                        "label": "extracted",
+                                        "type": "EXTRACTED_FROM",
+                                        "workspace": collection.title,
+                                    }
+                                )
 
                         return {"nodes": list(nodes_map.values()), "edges": edges_list}
                     finally:
@@ -636,13 +789,86 @@ class GlobalGraphService:
         final_nodes = list(aggregated_nodes.values())
         
         # 简单去重边
-        unique_edges = {f"{e['source']}_{e['target']}": e for e in aggregated_edges}.values()
+        unique_edges = {f"{e['source']}_{e['target']}_{e.get('type', '')}": e for e in aggregated_edges}.values()
+        unique_edges_list = list(unique_edges)
 
-        logger.info(f"Federated graph search completed: {len(final_nodes)} nodes, {len(unique_edges)} edges")
+        entity_matches: List[Dict[str, Any]] = []
+        for node in final_nodes:
+            if node.get("type") != "entity":
+                continue
+            metadata = node.get("metadata", {}) or {}
+            entity_matches.append(
+                {
+                    "id": node.get("id"),
+                    "name": node.get("label") or node.get("name") or node.get("id"),
+                    "collection_id": metadata.get("collection_id"),
+                    "collection_name": metadata.get("collection_name"),
+                    "document_id": metadata.get("document_id"),
+                    "score": metadata.get("match_score"),
+                }
+            )
+
+        matched_collections: List[Dict[str, Any]] = []
+        matched_documents: List[Dict[str, Any]] = []
+        if normalized_query:
+            for col in active_collections:
+                blob = " ".join(
+                    filter(
+                        None,
+                        [
+                            getattr(col, "title", "") or "",
+                            getattr(col, "description", "") or "",
+                            str(col.id),
+                        ],
+                    )
+                ).lower()
+                if normalized_query in blob:
+                    matched_collections.append(
+                        {
+                            "id": str(col.id),
+                            "title": getattr(col, "title", None) or str(col.id),
+                            "description": getattr(col, "description", None),
+                            "status": _status_value(getattr(col, "status", "")),
+                        }
+                    )
+
+            document_hits = await self.document_service.search_documents_by_name(
+                user_id=user_id,
+                query=normalized_query,
+                limit=200,
+                collection_ids=list(collection_lookup.keys()),
+            )
+            for doc in document_hits:
+                col_id = str(getattr(doc, "collection_id", ""))
+                parent_collection = collection_lookup.get(col_id)
+                matched_documents.append(
+                    {
+                        "id": str(doc.id),
+                        "name": getattr(doc, "name", "") or getattr(doc, "title", "") or "Untitled Document",
+                        "collection_id": col_id,
+                        "collection_name": getattr(parent_collection, "title", None) or col_id,
+                        "status": _status_value(getattr(doc, "status", "")),
+                        "updated_at": getattr(doc, "gmt_updated", None),
+                    }
+                )
+
+        logger.info(
+            "Federated graph search completed: %s nodes, %s edges (matches: %s collections, %s documents, %s entities)",
+            len(final_nodes),
+            len(unique_edges_list),
+            len(matched_collections),
+            len(matched_documents),
+            len(entity_matches),
+        )
         
         return {
             "nodes": final_nodes,
-            "edges": list(unique_edges)
+            "edges": unique_edges_list,
+            "matches": {
+                "collections": matched_collections,
+                "documents": matched_documents,
+                "entities": entity_matches,
+            },
         }
 
 

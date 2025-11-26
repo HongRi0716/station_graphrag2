@@ -13,6 +13,7 @@ RUN yarn install --frozen-lockfile
 COPY . .
 
 # Build the Next.js application
+# Use the existing build script, which runs Next.js and post-build steps
 RUN yarn build
 
 # Production stage
