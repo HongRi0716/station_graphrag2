@@ -106,15 +106,16 @@ def extract_tool_call_references(memory) -> List[Dict[str, Any]]:
                         # Format reference based on tool type
                         ref = None
                         try:
-                            if tool_name == "aperag_search_collection":
+                            # Support both prefixed and non-prefixed tool names
+                            if tool_name in ("aperag_search_collection", "search_collection"):
                                 ref = _format_search_reference(tool_result, args_dict)
-                            elif tool_name == "aperag_search_chat_files":
+                            elif tool_name in ("aperag_search_chat_files", "search_chat_files"):
                                 ref = _format_search_chat_files_reference(tool_result, args_dict)
-                            elif tool_name == "aperag_list_collections":
+                            elif tool_name in ("aperag_list_collections", "list_collections"):
                                 ref = _format_list_reference(tool_result, args_dict)
-                            elif tool_name == "aperag_web_search":
+                            elif tool_name in ("aperag_web_search", "web_search"):
                                 ref = _format_web_search_reference(tool_result, args_dict)
-                            elif tool_name == "aperag_web_read":
+                            elif tool_name in ("aperag_web_read", "web_read"):
                                 ref = _format_web_read_reference(tool_result, args_dict)
                             else:
                                 # Generic tool result reference

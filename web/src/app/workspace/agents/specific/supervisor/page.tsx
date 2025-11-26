@@ -50,8 +50,12 @@ export default function SupervisorWorkspacePage() {
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: '请求失败' }));
-        throw new Error(errorData.message || `HTTP ${response.status}`);
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage =
+          (typeof errorData === 'object' && errorData !== null
+            ? errorData.message || errorData.detail
+            : undefined) || `HTTP ${response.status}`;
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();

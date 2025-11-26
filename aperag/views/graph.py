@@ -171,15 +171,33 @@ async def global_graph_search_view(
     user: User = Depends(required_user),
 ) -> Dict[str, Any]:
     """Search for entities across all collections (Global Graph)"""
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"DEBUG: Received global graph search request for user {user.id}")
     try:
-        graph_data = await global_graph_service.get_global_graph_search(
-            user_id=str(user.id),
-            query=query,
-            top_k=top_k,
+        # Import services for dependency injection
+        from aperag.service.collection_service import collection_service
+        from aperag.service.search_service import search_service
+        from aperag.service.global_graph_service import GlobalGraphService
+        
+        # Initialize the global graph service with its dependencies
+        # Note: In a full DI container setup, this would be injected. 
+        # Here we manually compose it to ensure isolation and immediate availability.
+        global_service = GlobalGraphService(
+            collection_service=collection_service,
+            search_service=search_service
         )
+        
+        # Execute federated search across all user's active collections
+        # This aggregates nodes and edges from multiple local graphs
+        graph_data = await global_service.federated_graph_search(
+            user=user,
+            query=query,
+            top_k=top_k
+        )
+        
         return graph_data
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        
     except Exception as e:
         logger.error(f"Global graph search failed: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Global search failed: {str(e)}")

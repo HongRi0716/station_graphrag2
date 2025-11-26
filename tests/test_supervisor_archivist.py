@@ -17,19 +17,21 @@ class TestSupervisorAgent:
         """测试任务分析功能"""
         supervisor = agent_registry.get_agent(AgentRole.SUPERVISOR)
         
+        state = AgentState(session_id="test-analysis")
+
         # 测试应急响应任务
-        analysis = supervisor._analyze_task("#1主变跳闸")
+        analysis = await supervisor._analyze_task(state, "#1主变跳闸")
         assert analysis["task_type"] == "emergency_response"
         assert analysis["priority"] == "urgent"
         assert analysis["requires_collaboration"] == True
         
         # 测试操作规划任务
-        analysis = supervisor._analyze_task("生成#1主变转冷备用操作票")
+        analysis = await supervisor._analyze_task(state, "生成#1主变转冷备用操作票")
         assert analysis["task_type"] == "operation_planning"
         assert analysis["priority"] == "high"
         
         # 测试查询任务
-        analysis = supervisor._analyze_task("查询主变操作规程")
+        analysis = await supervisor._analyze_task(state, "查询主变操作规程")
         assert analysis["task_type"] == "information_retrieval"
         assert analysis["requires_collaboration"] == False
     

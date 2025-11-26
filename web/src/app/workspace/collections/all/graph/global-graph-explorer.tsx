@@ -25,6 +25,11 @@ import { useTheme } from 'next-themes';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { toast } from 'sonner';
+
+// [ADD] Import optimized graph components
+import { GraphContextMenu } from '@/components/graph/graph-context-menu';
+import { GraphSourceViewer } from '@/components/graph/graph-source-viewer';
 
 const ForceGraph2D = dynamic(
   () => import('react-force-graph-2d').then((mod) => mod.default || mod),
@@ -47,6 +52,7 @@ interface GraphNode {
   description?: string;
   metadata?: NodeMetadata;
   workspace?: string;
+  source_collections?: string[];
   entity_name?: string;
   val?: number;
   x?: number;
@@ -99,6 +105,22 @@ export function GlobalGraphExplorer() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const graphRef = useRef<any>(null);
   const hierarchicalView = true;
+
+  // [ADD] Context Menu & Source Viewer State
+  const [contextMenu, setContextMenu] = useState<{
+    open: boolean;
+    x: number;
+    y: number;
+    node: any | null;
+  }>({ open: false, x: 0, y: 0, node: null });
+
+  const [sourceViewer, setSourceViewer] = useState<{
+    open: boolean;
+    docId: string;
+    collectionId: string;
+    docName?: string;
+    highlight?: string;
+  }>({ open: false, docId: '', collectionId: '', docName: '' });
 
   const nodeTypeColors = useMemo(
     () => ({
@@ -246,6 +268,7 @@ export function GlobalGraphExplorer() {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handleNodeClick = (node: any) => {
+    setContextMenu({ ...contextMenu, open: false }); // Close context menu on left click
     const currentTime = Date.now();
     const isDoubleClick =
       lastClickedNode === node.id && currentTime - lastClickTime < 500;
@@ -277,8 +300,55 @@ export function GlobalGraphExplorer() {
     const targetX = node.x ?? 0;
     const targetY = node.y ?? 0;
     graphRef.current?.centerAt(targetX, targetY, 800);
+    graphRef.current?.centerAt(targetX, targetY, 800);
     graphRef.current?.zoom(5, 1000);
   };
+
+  // [ADD] Right Click Handler
+  const handleNodeRightClick = useCallback((node: any, event: MouseEvent) => {
+    setContextMenu({
+      open: true,
+      x: event.clientX,
+      y: event.clientY,
+      node: node
+    });
+  }, []);
+
+  // [ADD] Menu Action Handler
+  const handleMenuAction = useCallback((action: string, node: any) => {
+    setContextMenu(prev => ({ ...prev, open: false }));
+
+    switch (action) {
+      case 'focus':
+        if (node.x && node.y) {
+          graphRef.current?.centerAt(node.x, node.y, 1000);
+          graphRef.current?.zoom(6, 1000);
+        }
+        break;
+      case 'chat':
+        router.push(`/workspace/chat?q=Explain entity "${node.name || node.entity_name}"`);
+        break;
+      case 'source':
+        // Check if we have direct document metadata
+        const docId = node.metadata?.document_id;
+        const colId = node.metadata?.collection_id;
+
+        if (docId && colId) {
+          setSourceViewer({
+            open: true,
+            docId: docId as string,
+            collectionId: colId as string,
+            docName: node.name || 'Document Source'
+          });
+        } else {
+          toast.info("Direct source link not available for this global entity.");
+        }
+        break;
+      case 'expand':
+        // Logic for expanding logic if needed
+        break;
+    }
+  }, [router]);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handleNodeHover = (node: any) => {
@@ -458,6 +528,7 @@ export function GlobalGraphExplorer() {
         ref={containerRef}
         className="bg-card flex-1 overflow-hidden rounded-lg border"
         style={{ minHeight: '400px' }}
+        onContextMenu={(e) => e.preventDefault()} // [ADD] Prevent default menu
       >
         {loading ? (
           <div className="text-muted-foreground flex h-full items-center justify-center">
@@ -564,6 +635,7 @@ export function GlobalGraphExplorer() {
             }}
             backgroundColor={resolvedTheme === 'dark' ? '#020817' : '#ffffff'}
             onNodeClick={handleNodeClick}
+            onNodeRightClick={handleNodeRightClick}
             onNodeHover={handleNodeHover}
             dagMode={hierarchicalView ? 'td' : undefined}
             dagLevelDistance={hierarchicalView ? 120 : undefined}
@@ -579,7 +651,14 @@ export function GlobalGraphExplorer() {
               const nodeType = (node.type || 'entity') as GraphNode['type'];
               const isHovered = hoveredNode?.id === node.id;
               const isHighlighted = highlightNodes.has(node.id);
-              const isDimmed = hoveredNode && !isHighlighted;
+
+              // [MOD] Spotlight Opacity Logic
+              // If any node is hovered/highlighted, dim others significantly
+              const hasActiveState = hoveredNode !== null;
+              const opacity = hasActiveState && !isHovered && !isHighlighted ? 0.1 : 1;
+
+              ctx.globalAlpha = opacity;
+              const isDimmed = false; // We use globalAlpha instead of color dimming now
 
               const baseSize =
                 nodeType === 'collection'
@@ -588,11 +667,7 @@ export function GlobalGraphExplorer() {
                     ? 12
                     : 7;
               const size = isHovered ? baseSize * 1.2 : baseSize;
-              const fillColor = isDimmed
-                ? resolvedTheme === 'dark'
-                  ? '#2f3542'
-                  : '#d4d4d4'
-                : getNodeColor(node);
+              const fillColor = getNodeColor(node);
 
               ctx.save();
               ctx.translate(x, y);
@@ -629,7 +704,7 @@ export function GlobalGraphExplorer() {
 
                 const textWidth = ctx.measureText(label).width;
                 const padding = 4;
-                const labelY = y + size + 6;
+                let labelY = y + size + 6; // Use let because it might be updated
 
                 ctx.fillStyle =
                   resolvedTheme === 'dark'
@@ -644,6 +719,44 @@ export function GlobalGraphExplorer() {
 
                 ctx.fillStyle = resolvedTheme === 'dark' ? '#fff' : '#000';
                 ctx.fillText(label, x, labelY);
+
+                // [ADD] Render Source Workspace Info
+                // Show source if it's an entity and we are hovered or zoomed in enough
+                if (nodeType === 'entity' && (isHovered || globalScale > 1.5)) {
+                  const workspace = node.metadata?.workspace as string | undefined;
+                  const sourceCollections = node.source_collections as string[] | undefined;
+
+                  let sourceLabel = '';
+                  if (sourceCollections && sourceCollections.length > 0) {
+                    // If multiple sources, show count or list first few
+                    sourceLabel = sourceCollections.length > 1
+                      ? `${sourceCollections.length} sources`
+                      : sourceCollections[0];
+                  } else if (workspace) {
+                    sourceLabel = workspace;
+                  }
+
+                  if (sourceLabel) {
+                    const sourceFontSize = fontSize * 0.85;
+                    ctx.font = `italic ${sourceFontSize}px Sans-Serif`;
+                    const sourceY = labelY + fontSize + 4;
+
+                    // Draw source background (optional, but helps readability)
+                    const sourceWidth = ctx.measureText(sourceLabel).width;
+                    ctx.fillStyle = resolvedTheme === 'dark'
+                      ? 'rgba(0,0,0,0.6)'
+                      : 'rgba(255,255,255,0.8)';
+                    ctx.fillRect(
+                      x - sourceWidth / 2 - 2,
+                      sourceY - 1,
+                      sourceWidth + 4,
+                      sourceFontSize + 2
+                    );
+
+                    ctx.fillStyle = resolvedTheme === 'dark' ? '#aaa' : '#666';
+                    ctx.fillText(sourceLabel, x, sourceY);
+                  }
+                }
               }
 
               if (nodeType === 'collection' || nodeType === 'document') {
@@ -667,6 +780,9 @@ export function GlobalGraphExplorer() {
                 ctx.textBaseline = 'middle';
                 ctx.fillText(isExpanded ? '−' : '+', indicatorX, indicatorY);
               }
+
+              // Restore alpha
+              ctx.globalAlpha = 1.0;
             }}
           />
         ) : (
@@ -675,6 +791,27 @@ export function GlobalGraphExplorer() {
           </div>
         )}
       </div>
+
+      {/* [ADD] Graph Components */}
+      <GraphContextMenu
+        open={contextMenu.open}
+        position={{ x: contextMenu.x, y: contextMenu.y }}
+        node={contextMenu.node}
+        onClose={() => setContextMenu(prev => ({ ...prev, open: false }))}
+        onAction={handleMenuAction}
+      />
+
+      {sourceViewer.open && (
+        <div className="absolute top-0 right-0 bottom-0 w-[400px] z-20 shadow-2xl border-l border-border/50 animate-in slide-in-from-right duration-300 bg-background">
+          <GraphSourceViewer
+            collectionId={sourceViewer.collectionId}
+            documentId={sourceViewer.docId}
+            documentName={sourceViewer.docName}
+            highlightText={sourceViewer.highlight}
+            onClose={() => setSourceViewer(prev => ({ ...prev, open: false }))}
+          />
+        </div>
+      )}
 
       {/* Node Detail Dialog */}
       <Dialog open={nodeDetailOpen} onOpenChange={setNodeDetailOpen}>

@@ -35,7 +35,7 @@ class SupervisorAgent(BaseAgent):
         self._log_thought(state, "thought", f"值班长接收任务: {query}")
         
         # 分析任务类型
-        task_analysis = self._analyze_task(query)
+        task_analysis = await self._analyze_task(state, query)
         
         self._log_thought(
             state,

@@ -7,7 +7,7 @@ VALUES (
     'preset_collections_config',
     '{
         "enabled": true,
-        "auto_create_for_new_users": false,
+        "auto_create_for_new_users": true,
         "collections": [
             {
                 "id": "substation_drawings",

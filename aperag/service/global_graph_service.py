@@ -498,6 +498,154 @@ class GlobalGraphService:
             return []
 
 
+    async def federated_graph_search(
+        self, user, query: str, top_k: int = 20
+    ) -> Dict[str, Any]:
+        """
+        执行全局联邦图谱搜索（结构化数据）。
+        用于前端 Global Graph Explorer 的可视化展示。
+        """
+        from aperag.graph import lightrag_manager
+        from aperag.schema.utils import parseCollectionConfig
+        from aperag.db.ops import async_db_ops
+
+        logger.info(f"Starting federated graph structure search for query: {query}")
+
+        # 1. 获取所有 Collection
+        collections = await async_db_ops.query_collections([str(user.id)])
+
+        active_collections = []
+        for col in collections:
+            # Check status
+            status_value = getattr(col, "status", "")
+            if hasattr(status_value, "value"):
+                status_value = status_value.value
+            
+            if str(status_value).upper() != "ACTIVE":
+                continue
+
+            try:
+                config = parseCollectionConfig(col.config)
+                if getattr(config, "enable_knowledge_graph", False):
+                    active_collections.append(col)
+            except Exception as e:
+                logger.debug(f"Skipping collection {col.id} due to config error: {e}")
+
+        if not active_collections:
+            return {"nodes": [], "edges": []}
+
+        # 2. 并发执行子图查询
+        # 限制并发数防止数据库过载
+        semaphore = asyncio.Semaphore(10)
+
+        async def _search_single_graph(collection):
+            async with semaphore:
+                try:
+                    logger.info(f"DEBUG: Processing collection {collection.id} ({collection.title})")
+                    rag = await lightrag_manager.create_lightrag_instance(collection)
+                    logger.info(f"DEBUG: Created RAG instance for {collection.id}")
+                    
+                    try:
+                        # A. 语义搜索实体 (Vector Search)
+                        # rag.entities_vdb.query 接受文本 query，内部会自动 embed
+                        logger.info(f"DEBUG: Querying entities for {collection.id}")
+                        similar_entities = await rag.entities_vdb.query(query, top_k=top_k)
+                        logger.info(f"DEBUG: Found {len(similar_entities)} entities for {collection.id}")
+                        
+                        if not similar_entities:
+                            return {"nodes": [], "edges": []}
+
+                        # B. 获取这些实体的子图 (Ego-Graph)
+                        nodes_map = {}
+                        edges_list = []
+                        
+                        # 优化：批量获取或并行获取
+                        for entity_data in similar_entities:
+                            e_name = entity_data['entity_name']
+                            
+                            # 添加中心节点
+                            # 使用 entity_name 作为 ID，允许前端自动合并
+                            
+                            nodes_map[e_name] = {
+                                "id": e_name, # Shared ID for visual merging
+                                "label": e_name,
+                                "type": "entity",
+                                "value": entity_data.get('distance', 1.0) * 10, # Visualization size
+                                "metadata": {
+                                    "workspace": collection.title, # Show collection name
+                                    "collection_id": str(collection.id),
+                                    "description": entity_data.get('content', '')[:100] + "...",
+                                    "source_id": entity_data.get('source_id')
+                                }
+                            }
+
+                            # 获取邻边
+                            # 注意：lightrag graph storage 接口可能不同
+                            if hasattr(rag.chunk_entity_relation_graph, 'get_node_edges'):
+                                node_edges = await rag.chunk_entity_relation_graph.get_node_edges(e_name)
+                                if node_edges:
+                                    for src, tgt in node_edges:
+                                        edge_id = f"{src}_{tgt}"
+                                        edges_list.append({
+                                            "source": src,
+                                            "target": tgt,
+                                            "id": edge_id,
+                                            "label": "related", # 简化，实际需查询边属性
+                                            "workspace": collection.title
+                                        })
+                                        
+                                        # 确保 source/target 都在 nodes_map 中 (作为占位符)
+                                        if src not in nodes_map:
+                                            nodes_map[src] = {"id": src, "label": src, "type": "entity", "metadata": {"workspace": collection.title}}
+                                        if tgt not in nodes_map:
+                                            nodes_map[tgt] = {"id": tgt, "label": tgt, "type": "entity", "metadata": {"workspace": collection.title}}
+
+                        return {"nodes": list(nodes_map.values()), "edges": edges_list}
+                    finally:
+                        await rag.finalize_storages()
+
+                except Exception as e:
+                    logger.warning(f"Graph search failed for {collection.title}: {e}")
+                    return {"nodes": [], "edges": []}
+
+        tasks = [_search_single_graph(col) for col in active_collections]
+        results = await asyncio.gather(*tasks)
+
+        # 3. 聚合结果
+        aggregated_nodes = {}
+        aggregated_edges = []
+
+        for res in results:
+            # 合并节点
+            for node in res['nodes']:
+                nid = node['id']
+                if nid not in aggregated_nodes:
+                    aggregated_nodes[nid] = node
+                    # Initialize source_collections
+                    aggregated_nodes[nid]['source_collections'] = [node['metadata']['workspace']]
+                else:
+                    # 节点已存在（跨库共现实体），合并信息
+                    if node['metadata']['workspace'] not in aggregated_nodes[nid]['source_collections']:
+                        aggregated_nodes[nid]['source_collections'].append(node['metadata']['workspace'])
+                    # 可以合并描述等
+
+            # 合并边
+            aggregated_edges.extend(res['edges'])
+
+        # 转换回列表
+        final_nodes = list(aggregated_nodes.values())
+        
+        # 简单去重边
+        unique_edges = {f"{e['source']}_{e['target']}": e for e in aggregated_edges}.values()
+
+        logger.info(f"Federated graph search completed: {len(final_nodes)} nodes, {len(unique_edges)} edges")
+        
+        return {
+            "nodes": final_nodes,
+            "edges": list(unique_edges)
+        }
+
+
 global_graph_service = GlobalGraphService(
     collection_service=collection_service,
     document_service=document_service,

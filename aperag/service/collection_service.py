@@ -685,7 +685,7 @@ class CollectionService:
                 from aperag.preset_collections import PRESET_COLLECTIONS, COLLECTION_CATEGORIES
                 return {
                     "enabled": True,
-                    "auto_create_for_new_users": False,
+                    "auto_create_for_new_users": True,
                     "collections": PRESET_COLLECTIONS,
                     "categories": COLLECTION_CATEGORIES
                 }
@@ -730,6 +730,7 @@ class CollectionService:
                     description=description,
                     type=db_models.CollectionType.DOCUMENT,
                     config=view_models.CollectionConfig(
+                        source="system",
                         enable_summary=False,
                         enable_kg=True,
                         enable_vision=False,

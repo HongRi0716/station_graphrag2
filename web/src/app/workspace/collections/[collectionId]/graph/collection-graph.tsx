@@ -44,11 +44,13 @@ import {
 import { useTranslations } from 'next-intl';
 import { useTheme } from 'next-themes';
 import dynamic from 'next/dynamic';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { CollectionGraphNodeDetail } from './collection-graph-node-detail';
 import { CollectionGraphNodeMerge } from './collection-graph-node-merge';
+import { GraphContextMenu } from '@/components/graph/graph-context-menu';
+import { GraphSourceViewer } from '@/components/graph/graph-source-viewer';
 
 const ForceGraph2D = dynamic(
   () => import('react-force-graph-2d').then((r) => r),
@@ -87,6 +89,7 @@ export const CollectionGraph = ({
   collectionId?: string;
 }) => {
   const params = useParams();
+  const router = useRouter();
   const currentCollectionId = collectionId || (params.collectionId as string);
 
   // --- State ---
@@ -127,6 +130,23 @@ export const CollectionGraph = ({
   const [highlightLinks, setHighlightLinks] = useState(new Set());
   const [hoverNode, setHoverNode] = useState<ProcessedNode>();
   const [activeNode, setActiveNode] = useState<ProcessedNode>();
+
+  // New State for Context Menu & Source Viewer
+  const [sourceViewerState, setSourceViewerState] = useState<{
+    open: boolean;
+    collectionId?: string;
+    docId?: string;
+    docName?: string;
+    highlight?: string;
+  }>({ open: false });
+
+  const [contextMenu, setContextMenu] = useState<{
+    open: boolean;
+    x: number;
+    y: number;
+    node: any;
+  }>({ open: false, x: 0, y: 0, node: null });
+
   const [globalSearchQuery, setGlobalSearchQuery] = useState('');
   const color = useMemo(() => d3.scaleOrdinal(d3.schemeCategory10), []);
 
@@ -452,14 +472,18 @@ export const CollectionGraph = ({
   const handleCloseDetail = useCallback(() => {
     setActiveNode(undefined);
     setHoverNode(undefined);
-    highlightNodes.clear();
-    highlightLinks.clear();
-  }, [highlightLinks, highlightNodes]);
+    // Only clear highlights if source viewer is NOT open
+    if (!sourceViewerState.open) {
+      highlightNodes.clear();
+      highlightLinks.clear();
+    }
+  }, [highlightLinks, highlightNodes, sourceViewerState.open]);
 
   const handleNodeClick = useCallback(
     (node: any) => {
       // Convert to ProcessedNode - ForceGraph2D passes a generic node object
       const processedNode = node as ProcessedNode;
+      setContextMenu(prev => ({ ...prev, open: false })); // Close context menu on left click
 
       if (viewMode === 'hierarchy') {
         // Drill down logic
@@ -499,8 +523,105 @@ export const CollectionGraph = ({
     setHighlightLinks(new Set()); // Clear link highlighting
     setActiveNode(undefined); // Clear active node
     setHoverNode(undefined); // Clear hover node
+    setSourceViewerState({ open: false }); // Close source viewer
     fetchHierarchyData(); // Reload hierarchy
   }, [fetchHierarchyData]);
+
+  const handleNodeRightClick = useCallback((node: any, event: any) => {
+    // Determine coordinates (ForceGraph passes event with clientX/Y or x/y depending on version, usually standard MouseEvent structure in event)
+    // react-force-graph-2d passes (node, event) where event is the DOM event
+    setContextMenu({
+      open: true,
+      x: event.clientX,
+      y: event.clientY,
+      node: node,
+    });
+  }, []);
+
+  const handleLinkClick = useCallback((link: any) => {
+    // Check if link has source info
+    const props = link.properties || {};
+    // Try to find source doc id from various possible property names
+    const docId = props.source_doc_id || (link as any).source_doc_id || props.document_id;
+    const text = props.source_text || props.context || (link as any).context || props.text;
+
+    if (docId) {
+      const docNode = graphData?.nodes.find(n => n.id === docId);
+      const docName = docNode?.label || 'Document';
+
+      setSourceViewerState({
+        open: true,
+        collectionId: currentCollectionId === 'all' ? (link.sourceCollectionId || props.collection_id) : currentCollectionId,
+        docId,
+        docName,
+        highlight: text
+      });
+
+      // Highlight this link and connected nodes
+      highlightLinks.clear();
+      highlightNodes.clear();
+      highlightLinks.add(link);
+
+      const sId = typeof link.source === 'object' ? link.source.id : link.source;
+      const tId = typeof link.target === 'object' ? link.target.id : link.target;
+      const sNode = graphData?.nodes.find(n => n.id === sId);
+      const tNode = graphData?.nodes.find(n => n.id === tId);
+      if (sNode) highlightNodes.add(sNode);
+      if (tNode) highlightNodes.add(tNode);
+
+      setHighlightNodes(new Set(highlightNodes));
+      setHighlightLinks(new Set(highlightLinks));
+
+      // Close detail if open to avoid clutter
+      setActiveNode(undefined);
+    } else {
+      toast.info("No source document linked to this relationship.");
+    }
+  }, [graphData, currentCollectionId, highlightLinks, highlightNodes]);
+
+  const handleContextMenuAction = useCallback((action: string, node: any) => {
+    setContextMenu(prev => ({ ...prev, open: false }));
+    switch (action) {
+      case 'focus':
+        if (node.x && node.y) {
+          graphRef.current?.centerAt(node.x, node.y, 1000);
+          graphRef.current?.zoom(6, 1000);
+        }
+        break;
+      case 'chat':
+        // Navigate to chat with preset query
+        router.push(`/workspace/chat?q=Explain entity "${node.label}"`);
+        break;
+      case 'source':
+        if (node.isDocument && node.docId) {
+          setSourceViewerState({
+            open: true,
+            collectionId: node.collectionId || currentCollectionId,
+            docId: node.docId,
+            docName: node.label
+          });
+        } else {
+          toast.info("Source viewing for raw entities requires edge traversal (Coming Soon)");
+        }
+        break;
+      case 'expand':
+        if (node.isCollectionRoot && node.collectionId) {
+          setViewMode('graph');
+          fetchEntityGraph(node.collectionId);
+        }
+        break;
+      case 'search':
+        setGlobalSearchQuery(node.label);
+        if (viewMode === 'graph') {
+          fetchEntityGraph(targetContext?.collectionId || 'all', undefined, node.label);
+        } else {
+          setViewMode('graph');
+          setTargetContext({ collectionId: 'all' });
+          fetchEntityGraph('all', undefined, node.label);
+        }
+        break;
+    }
+  }, [currentCollectionId, viewMode, targetContext, fetchEntityGraph, router]);
 
   const getGraphData = useCallback(
     async (query?: string) => {
@@ -565,54 +686,46 @@ export const CollectionGraph = ({
     return () => window.removeEventListener('resize', handleResizeContainer);
   }, [handleResizeContainer, fullscreen]);
 
+  // [MOD] Spotlight Effect logic in useEffect
   useEffect(() => {
     highlightNodes.clear();
     highlightLinks.clear();
 
-    if (activeNode) {
+    if (activeNode || hoverNode) {
+      const target = activeNode || hoverNode;
+      if (!target) return;
+
       const nodeLinks = graphData?.links.filter((link) => {
-        const sourceId =
-          typeof link.source === 'object'
-            ? (link.source as any).id
-            : link.source;
-        const targetId =
-          typeof link.target === 'object'
-            ? (link.target as any).id
-            : link.target;
-        return sourceId === activeNode.id || targetId === activeNode.id;
+        const sourceId = typeof link.source === 'object' ? (link.source as any).id : link.source;
+        const targetId = typeof link.target === 'object' ? (link.target as any).id : link.target;
+        return sourceId === target.id || targetId === target.id;
       });
+
       nodeLinks?.forEach((link: ProcessedEdge) => {
         highlightLinks.add(link);
-        const sourceId =
-          typeof link.source === 'object'
-            ? (link.source as any).id
-            : link.source;
-        const targetId =
-          typeof link.target === 'object'
-            ? (link.target as any).id
-            : link.target;
-        const sourceNode = graphData?.nodes.find((n) => n.id === sourceId);
-        const targetNode = graphData?.nodes.find((n) => n.id === targetId);
-        if (sourceNode) highlightNodes.add(sourceNode);
-        if (targetNode) highlightNodes.add(targetNode);
+        const sourceId = typeof link.source === 'object' ? (link.source as any).id : link.source;
+        const targetId = typeof link.target === 'object' ? (link.target as any).id : link.target;
+        const sNode = graphData?.nodes.find((n) => n.id === sourceId);
+        const tNode = graphData?.nodes.find((n) => n.id === targetId);
+        if (sNode) highlightNodes.add(sNode);
+        if (tNode) highlightNodes.add(tNode);
       });
-      highlightNodes.add(activeNode);
-      // @ts-expect-error node.x node.y
-      graphRef.current?.centerAt(activeNode.x, activeNode.y, 400);
-      graphRef.current?.zoom(3, 600);
+      highlightNodes.add(target);
+
+      // Auto-center only on activeNode change, not hover
+      if (activeNode && target === activeNode) {
+        // @ts-expect-error node.x node.y
+        graphRef.current?.centerAt(activeNode.x, activeNode.y, 400);
+        graphRef.current?.zoom(3, 600);
+      }
     } else {
-      graphRef.current?.centerAt(0, 0, 400);
-      graphRef.current?.zoom(1.5, 600);
+      // Reset view only if explicitly cleared (optional, maybe distracting)
+      // graphRef.current?.centerAt(0, 0, 400);
+      // graphRef.current?.zoom(1.5, 600);
     }
-    setHighlightNodes(highlightNodes);
-    setHighlightLinks(highlightLinks);
-  }, [
-    activeNode,
-    graphData?.links,
-    graphData?.nodes,
-    highlightLinks,
-    highlightNodes,
-  ]);
+    setHighlightNodes(new Set(highlightNodes));
+    setHighlightLinks(new Set(highlightLinks));
+  }, [activeNode, hoverNode, graphData]);
 
   // Initial Load Router
   useEffect(() => {
@@ -748,7 +861,7 @@ export const CollectionGraph = ({
                     onClick={() => setMergeSuggestionOpen(true)}
                   >
                     {mergeSuggestion?.suggestions?.length &&
-                    mergeSuggestion?.suggestions?.length > 10
+                      mergeSuggestion?.suggestions?.length > 10
                       ? '10+'
                       : mergeSuggestion?.suggestions?.length}
                   </Badge>
@@ -895,90 +1008,49 @@ export const CollectionGraph = ({
             return activeEntities.includes(nodeType);
           }}
           onNodeClick={handleNodeClick}
-          onNodeHover={(node) => {
-            if (activeNode) return;
-            highlightNodes.clear();
-            highlightLinks.clear();
-            if (node) {
-              const nodeId = (node as any).id;
-              const nodeLinks = graphData?.links.filter((link) => {
-                const sourceId =
-                  typeof link.source === 'object'
-                    ? (link.source as any).id
-                    : link.source;
-                const targetId =
-                  typeof link.target === 'object'
-                    ? (link.target as any).id
-                    : link.target;
-                return sourceId === nodeId || targetId === nodeId;
-              });
-              nodeLinks?.forEach((link: ProcessedEdge) => {
-                highlightLinks.add(link);
-              });
-            }
-            setHoverNode(node ? (node as ProcessedNode) : undefined);
-            setHighlightNodes(highlightNodes);
-            setHighlightLinks(highlightLinks);
-          }}
-          onLinkHover={(link) => {
-            if (activeNode) return;
-            highlightNodes.clear();
-            highlightLinks.clear();
-            if (link) {
-              highlightLinks.add(link);
-            }
-            setHighlightNodes(highlightNodes);
-            setHighlightLinks(highlightLinks);
-          }}
-          nodeCanvasObject={(node: any, ctx) => {
+          onNodeRightClick={handleNodeRightClick}
+          onLinkClick={handleLinkClick}
+          onNodeHover={(node) => setHoverNode(node as ProcessedNode)}
+
+          // Rendering Props
+          nodeCanvasObject={(node: any, ctx, globalScale) => {
             const x = node.x || 0;
             const y = node.y || 0;
             const size = node.value || 5;
-            const isHover = node === hoverNode;
-            const isActive = node === activeNode;
-            const processedNode = node as ProcessedNode;
 
+            // [MOD] Spotlight Logic: Opacity
+            const isHighlighted = highlightNodes.has(node);
+            const hasSelection = highlightNodes.size > 0;
+            // Dim if selection exists AND this node is not highlighted
+            const opacity = hasSelection && !isHighlighted ? 0.1 : 1;
+
+            ctx.globalAlpha = opacity;
             ctx.beginPath();
 
-            // Shape Logic
+            // ... (Existing Shape Logic) ...
+            const processedNode = node as ProcessedNode;
             if (processedNode.isCollectionRoot) {
-              // Collection = Rounded Rect / Folder-ish
-              // [FIX] Use safe drawer instead of roundRect for compatibility
-              drawRoundRect(
-                ctx,
-                x - size,
-                y - size * 0.8,
-                size * 2,
-                size * 1.6,
-                4,
-              );
-              ctx.fillStyle = isActive || isHover ? '#3b82f6' : '#60a5fa'; // Blue
+              ctx.fillStyle = '#3b82f6';
+              drawRoundRect(ctx, x - size, y - size * 0.8, size * 2, size * 1.6, 4);
             } else if (processedNode.isDocument) {
-              // Document = Rect
+              ctx.fillStyle = '#10b981';
               ctx.rect(x - size * 0.8, y - size, size * 1.6, size * 2);
-              ctx.fillStyle = isActive || isHover ? '#10b981' : '#34d399'; // Green
             } else {
-              // Entity = Circle
+              ctx.fillStyle = color(processedNode.properties?.entity_type || '');
               ctx.arc(x, y, size, 0, 2 * Math.PI);
-              ctx.fillStyle =
-                isActive || isHover
-                  ? '#f43f5e'
-                  : color(processedNode.properties?.entity_type || '');
             }
-
             ctx.fill();
 
-            // Label (LOD)
-            // Show label if: Hierarchy mode, OR Hover, OR High Value Node
-            if (viewMode === 'hierarchy' || isHover || size > 10) {
-              const label = processedNode.label || String(node.id);
-              const fontSize = processedNode.isCollectionRoot ? 14 : 10; // Larger for collections
-              ctx.font = `${fontSize}px Sans-Serif`;
+            // Label Logic (Only show if highlighted or zoomed in)
+            if (opacity > 0.5 && (globalScale > 1.2 || isHighlighted)) {
+              const label = processedNode.label;
+              ctx.font = `${10 / globalScale}px Sans-Serif`; // Scalable font
               ctx.fillStyle = resolvedTheme === 'dark' ? '#fff' : '#000';
               ctx.textAlign = 'center';
-              ctx.textBaseline = 'top';
-              ctx.fillText(label, x, y + size + 2);
+              ctx.fillText(label, x, y + size + 4);
             }
+
+            ctx.globalAlpha = 1; // Reset opacity
           }}
           nodePointerAreaPaint={(node: any, color, ctx) => {
             const x = node.x || 0;
@@ -1006,25 +1078,10 @@ export const CollectionGraph = ({
             ctx.fill();
           }}
           linkLabel="id"
-          linkColor={() => (resolvedTheme === 'dark' ? '#555' : '#ccc')}
-          linkWidth={(link) => {
-            return highlightLinks.has(link) ? 2 : 1;
-          }}
-          linkDirectionalParticleWidth={(link) => {
-            return highlightLinks.has(link) ? 3 : 0;
-          }}
-          linkDirectionalParticles={2}
-          linkVisibility={(link) => {
-            // @ts-expect-error link.source.properties
-            const sourceEntityType = link.source?.properties?.entity_type || '';
-
-            // @ts-expect-error link.source.properties
-            const tatgetEntityType = link.target?.properties?.entity_type || '';
-            return (
-              activeEntities.includes(sourceEntityType) &&
-              activeEntities.includes(tatgetEntityType)
-            );
-          }}
+          linkColor={(link) => highlightLinks.has(link) ? (resolvedTheme === 'dark' ? '#fff' : '#000') : (resolvedTheme === 'dark' ? '#555' : '#ccc')}
+          linkWidth={(link) => highlightLinks.has(link) ? 2 : 0.5}
+          // Hide non-highlighted links when spotlight is active
+          linkVisibility={(link) => highlightNodes.size === 0 || highlightLinks.has(link)}
         />
 
         <CollectionGraphNodeDetail
@@ -1032,6 +1089,34 @@ export const CollectionGraph = ({
           node={activeNode}
           onClose={handleCloseDetail}
         />
+
+        {sourceViewerState.open && sourceViewerState.collectionId && sourceViewerState.docId && (
+          <div className="absolute top-0 right-0 bottom-0 z-20 h-full shadow-xl animate-in slide-in-from-right-10">
+            <GraphSourceViewer
+              collectionId={sourceViewerState.collectionId}
+              documentId={sourceViewerState.docId}
+              documentName={sourceViewerState.docName}
+              highlightText={sourceViewerState.highlight}
+              onClose={() => {
+                setSourceViewerState(prev => ({ ...prev, open: false }));
+                // Clear highlight if we are closing
+                highlightNodes.clear();
+                highlightLinks.clear();
+                setHighlightNodes(new Set());
+                setHighlightLinks(new Set());
+              }}
+            />
+          </div>
+        )}
+
+        <GraphContextMenu
+          open={contextMenu.open}
+          position={{ x: contextMenu.x, y: contextMenu.y }}
+          node={contextMenu.node}
+          onClose={() => setContextMenu(prev => ({ ...prev, open: false }))}
+          onAction={handleContextMenuAction}
+        />
+
         {mergeSuggestion && (
           <CollectionGraphNodeMerge
             dataSource={mergeSuggestion}

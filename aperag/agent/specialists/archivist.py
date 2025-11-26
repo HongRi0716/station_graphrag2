@@ -32,31 +32,45 @@ class ArchivistAgent(BaseAgent):
         query = input_data.get("query", input_data.get("task", ""))
         search_type = input_data.get("search_type", "hybrid")  # vector, graph, hybrid
         
+        collection_ids = input_data.get("collection_ids")
+        
         self._log_thought(state, "thought", f"图谱专家接收查询: {query}")
         
         # 判断查询类型
         if any(keyword in query for keyword in ["关系", "连接", "路径", "关联"]):
             return await self._graph_traversal(state, query)
         elif any(keyword in query for keyword in ["历史", "案例", "记录"]):
-            return await self._historical_search(state, query)
+            return await self._historical_search(state, query, collection_ids)
         else:
-            return await self._knowledge_search(state, query, search_type)
+            return await self._knowledge_search(state, query, search_type, collection_ids)
     
     async def _knowledge_search(
         self,
         state: AgentState,
         query: str,
-        search_type: str
+        search_type: str,
+        collection_ids: Optional[List[str]] = None
     ) -> Dict[str, Any]:
         """知识库检索"""
         self._log_thought(state, "action", f"执行{search_type}检索")
         
         if self.user_id:
             try:
+                # 如果未指定知识库，则获取用户的所有知识库（图谱专家默认搜索全局）
+                if not collection_ids:
+                    from aperag.service.collection_service import collection_service
+                    collections = await collection_service.get_all_collections(self.user_id)
+                    collection_ids = [str(c.id) for c in collections]
+                    
+                    if not collection_ids:
+                        self._log_thought(state, "observation", "用户没有知识库，跳过检索")
+                        return self._fallback_response(query)
+
                 # 使用BaseAgent的检索能力
                 results = await self._search_knowledge(
                     state=state,
                     query=query,
+                    collection_ids=collection_ids,
                     top_k=10
                 )
                 
@@ -206,7 +220,8 @@ class ArchivistAgent(BaseAgent):
     async def _historical_search(
         self,
         state: AgentState,
-        query: str
+        query: str,
+        collection_ids: Optional[List[str]] = None
     ) -> Dict[str, Any]:
         """历史数据查询"""
         self._log_thought(state, "action", "检索历史数据")
@@ -214,9 +229,16 @@ class ArchivistAgent(BaseAgent):
         # 检索历史记录
         if self.user_id:
             try:
+                # 如果未指定知识库，则获取用户的所有知识库
+                if not collection_ids:
+                    from aperag.service.collection_service import collection_service
+                    collections = await collection_service.get_all_collections(self.user_id)
+                    collection_ids = [str(c.id) for c in collections]
+
                 results = await self._search_knowledge(
                     state=state,
                     query=query,
+                    collection_ids=collection_ids,
                     top_k=20  # 历史查询返回更多结果
                 )
                 

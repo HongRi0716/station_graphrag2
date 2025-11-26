@@ -31,6 +31,7 @@ class ArchivistRequest(BaseModel):
     chat_id: Optional[str] = Field(None, description="聊天ID")
     search_type: str = Field("hybrid", description="检索类型: vector/graph/hybrid")
     top_k: int = Field(10, description="返回结果数量")
+    collection_ids: Optional[List[str]] = Field(None, description="指定检索的知识库ID列表")
 
 
 class ArchivistResponse(BaseModel):
@@ -79,7 +80,8 @@ async def search_knowledge(
         # 执行检索
         result = await agent.run(state, {
             "query": request.query,
-            "search_type": request.search_type
+            "search_type": request.search_type,
+            "collection_ids": request.collection_ids
         })
         
         # 提取思维链
@@ -185,7 +187,7 @@ async def historical_search(
         state = AgentState(session_id=f"archivist-history-{request.user_id}")
         
         # 执行历史查询
-        result = await agent._historical_search(state, request.query)
+        result = await agent._historical_search(state, request.query, request.collection_ids)
         
         return ArchivistResponse(
             success=True,
