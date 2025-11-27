@@ -641,48 +641,163 @@ export function GlobalGraphExplorer() {
         </div>
       </div>
 
+      {/* 🔥 Search Status Banner */}
+      {searchMatchedNodes.size > 0 && (
+        <div className="bg-orange-500/10 border-b border-orange-500/30 px-4 py-2 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-full bg-orange-500 animate-pulse"></div>
+              <span className="text-sm font-semibold text-orange-600 dark:text-orange-400">
+                搜索结果激活
+              </span>
+            </div>
+            <Badge variant="secondary" className="bg-orange-500/20 text-orange-700 dark:text-orange-300">
+              找到 {searchMatchedNodes.size} 个匹配实体
+            </Badge>
+            {spotlightMode && (
+              <Badge variant="outline" className="text-xs">
+                🔦 聚光灯模式
+              </Badge>
+            )}
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setQuery('');
+              setSearchMatchedNodes(new Set());
+              setSpotlightMode(false);
+              setSpotlightNodes(new Set());
+              setHighlightTreeIds(new Set());
+              handleSearch(true);
+            }}
+            className="text-xs"
+          >
+            <X className="h-3 w-3 mr-1" />
+            清除搜索
+          </Button>
+        </div>
+      )}
+
       <ResizablePanelGroup direction="horizontal" className="flex-1 overflow-hidden">
-        {/* Left Panel: Directory Tree */}
+        {/* Left Panel: Search Results or Directory Tree */}
         <ResizablePanel defaultSize={20} minSize={15} maxSize={40} className="border-r bg-muted/10">
           <div className="flex flex-col h-full">
-            <div className="p-3 border-b flex items-center justify-between">
-              <span className="font-semibold text-sm flex items-center gap-2">
-                <Layers className="h-4 w-4" /> 知识库目录
-              </span>
-              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={fetchDirectoryTree}>
-                <RotateCcw className="h-3 w-3" />
-              </Button>
-            </div>
-            <ScrollArea className="flex-1 p-2">
-              {treeLoading ? (
-                <div className="flex justify-center py-8 text-muted-foreground">
-                  <Loader2 className="h-6 w-6 animate-spin" />
+            {/* 🔥 Search Results Mode */}
+            {searchMatchedNodes.size > 0 ? (
+              <>
+                <div className="p-3 border-b flex items-center justify-between bg-orange-500/5">
+                  <span className="font-semibold text-sm flex items-center gap-2">
+                    <Search className="h-4 w-4 text-orange-500" />
+                    搜索结果 ({searchMatchedNodes.size})
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6"
+                    onClick={() => {
+                      setQuery('');
+                      setSearchMatchedNodes(new Set());
+                      setSpotlightMode(false);
+                      setSpotlightNodes(new Set());
+                      handleSearch(true);
+                    }}
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
                 </div>
-              ) : treeData.length === 0 ? (
-                <div className="text-center py-8 text-xs text-muted-foreground">暂无知识库</div>
-              ) : (
-                <div className="space-y-1">
-                  {treeData.map(node => (
-                    <TreeItem
-                      key={node.id}
-                      node={node}
-                      onSelect={handleTreeSelect}
-                      selectedId={selectedTreeId}
-                      expandedIds={expandedTreeIds}
-                      highlightIds={highlightTreeIds}
-                      toggleExpand={(id) => {
-                        setExpandedTreeIds(prev => {
-                          const next = new Set(prev);
-                          if (next.has(id)) next.delete(id);
-                          else next.add(id);
-                          return next;
-                        });
-                      }}
-                    />
-                  ))}
+                <ScrollArea className="flex-1 p-2">
+                  <div className="space-y-1">
+                    {Array.from(searchMatchedNodes).map((nodeId) => {
+                      const node = graphData.nodes.find(n => n.id === nodeId);
+                      if (!node) return null;
+
+                      const nodeName = node.name || node.entity_name || node.id;
+                      const nodeType = node.type || 'entity';
+                      const sources = node.source_collections || [];
+
+                      return (
+                        <div
+                          key={nodeId}
+                          className="flex flex-col gap-1 p-2 rounded-sm hover:bg-orange-500/10 cursor-pointer border border-transparent hover:border-orange-500/30 transition-all"
+                          onClick={() => {
+                            if (graphRef.current && node.x !== undefined && node.y !== undefined) {
+                              graphRef.current.centerAt(node.x, node.y, 1000);
+                              graphRef.current.zoom(6, 1000);
+
+                              // 临时高亮该节点
+                              setHighlightNodes(new Set([nodeId]));
+                              setTimeout(() => {
+                                setHighlightNodes(new Set());
+                              }, 2000);
+                            }
+                          }}
+                        >
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-orange-500"></div>
+                            <span className="text-sm font-medium truncate flex-1">
+                              {nodeName}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 ml-4">
+                            <Badge variant="outline" className="text-xs">
+                              {nodeType}
+                            </Badge>
+                            {sources.length > 0 && (
+                              <span className="text-xs text-muted-foreground truncate">
+                                {sources.length} 个来源
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </ScrollArea>
+              </>
+            ) : (
+              /* Directory Tree Mode */
+              <>
+                <div className="p-3 border-b flex items-center justify-between">
+                  <span className="font-semibold text-sm flex items-center gap-2">
+                    <Layers className="h-4 w-4" /> 知识库目录
+                  </span>
+                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={fetchDirectoryTree}>
+                    <RotateCcw className="h-3 w-3" />
+                  </Button>
                 </div>
-              )}
-            </ScrollArea>
+                <ScrollArea className="flex-1 p-2">
+                  {treeLoading ? (
+                    <div className="flex justify-center py-8 text-muted-foreground">
+                      <Loader2 className="h-6 w-6 animate-spin" />
+                    </div>
+                  ) : treeData.length === 0 ? (
+                    <div className="text-center py-8 text-xs text-muted-foreground">暂无知识库</div>
+                  ) : (
+                    <div className="space-y-1">
+                      {treeData.map(node => (
+                        <TreeItem
+                          key={node.id}
+                          node={node}
+                          onSelect={handleTreeSelect}
+                          selectedId={selectedTreeId}
+                          expandedIds={expandedTreeIds}
+                          highlightIds={highlightTreeIds}
+                          toggleExpand={(id) => {
+                            setExpandedTreeIds(prev => {
+                              const next = new Set(prev);
+                              if (next.has(id)) next.delete(id);
+                              else next.add(id);
+                              return next;
+                            });
+                          }}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </ScrollArea>
+              </>
+            )}
           </div>
         </ResizablePanel>
 
@@ -747,7 +862,7 @@ export function GlobalGraphExplorer() {
                 nodeColor={(node: any) => {
                   // 搜索匹配的节点高亮显示
                   if (searchMatchedNodes.has(node.id)) {
-                    return '#fbbf24'; // 黄色高亮
+                    return '#ff6b35'; // 🎨 橙红色高亮
                   }
                   if (highlightNodes.size > 0 && !highlightNodes.has(node.id)) {
                     return resolvedTheme === 'dark' ? '#333' : '#eee';
@@ -761,8 +876,14 @@ export function GlobalGraphExplorer() {
 
                   // 高亮搜索匹配节点的连接
                   if (searchMatchedNodes.has(sourceId) || searchMatchedNodes.has(targetId)) {
-                    return '#fbbf24';
+                    return '#ff6b35'; // 🎨 橙红色高亮连接
                   }
+
+                  // 🔦 聚光灯模式：淡化非相关连接
+                  if (spotlightMode) {
+                    return resolvedTheme === 'dark' ? '#ffffff25' : '#00000025';
+                  }
+
                   return resolvedTheme === 'dark' ? '#ffffff20' : '#00000020';
                 }}
                 linkWidth={(link: any) => {
@@ -820,15 +941,15 @@ export function GlobalGraphExplorer() {
                   const isHighlighted = highlightNodes.has(node.id);
                   const isSearchMatched = searchMatchedNodes.has(node.id);
 
-                  // 🔦 聚光灯模式透明度控制
+                  // 🔦 聚光灯模式透明度控制 - 平衡可见性
                   if (spotlightMode) {
                     const isInSpotlight = spotlightNodes.has(node.id);
                     if (isSearchMatched) {
                       ctx.globalAlpha = 1.0;  // 搜索匹配：完全不透明
                     } else if (isInSpotlight) {
-                      ctx.globalAlpha = 0.7;  // 一跳邻居：较明显
+                      ctx.globalAlpha = 0.6;  // 一跳邻居：较明显
                     } else {
-                      ctx.globalAlpha = 0.4;  // 其他节点：可见但淡化
+                      ctx.globalAlpha = 0.3;  // 其他节点：清晰可见
                     }
                   } else {
                     ctx.globalAlpha = 1.0;
@@ -836,16 +957,25 @@ export function GlobalGraphExplorer() {
 
                   // 节点大小：搜索匹配 > 高亮 > 普通
                   let size = 5;
-                  if (isSearchMatched) size = 10;
+                  if (isSearchMatched) size = 10; // 🎯 适中大小，突出但不过分
                   else if (isHighlighted) size = 8;
                   else if (node.val) size = Math.min(node.val * 2, 12);
+
+                  // 🎨 绘制适度光晕效果 (仅针对搜索匹配节点)
+                  if (isSearchMatched) {
+                    // 单层光晕，更简洁
+                    ctx.beginPath();
+                    ctx.arc(node.x, node.y, size + 6, 0, 2 * Math.PI, false);
+                    ctx.fillStyle = 'rgba(255, 107, 53, 0.25)'; // 橙红色光晕
+                    ctx.fill();
+                  }
 
                   ctx.beginPath();
                   ctx.arc(node.x, node.y, size, 0, 2 * Math.PI, false);
 
                   // 颜色逻辑
                   if (isSearchMatched) {
-                    ctx.fillStyle = '#fbbf24'; // 黄色
+                    ctx.fillStyle = '#ff6b35'; // 🎨 橙红色，更醒目
                   } else if (highlightNodes.size > 0 && !isHighlighted) {
                     ctx.fillStyle = resolvedTheme === 'dark' ? '#333' : '#e5e7eb';
                   } else {
@@ -856,8 +986,8 @@ export function GlobalGraphExplorer() {
 
                   // 边框
                   if (isSearchMatched || isHighlighted) {
-                    ctx.strokeStyle = isSearchMatched ? '#f59e0b' : (resolvedTheme === 'dark' ? '#fff' : '#000');
-                    ctx.lineWidth = 2 / globalScale;
+                    ctx.strokeStyle = isSearchMatched ? '#e63946' : (resolvedTheme === 'dark' ? '#fff' : '#000');
+                    ctx.lineWidth = (isSearchMatched ? 3 : 2) / globalScale;
                     ctx.stroke();
                   }
 
@@ -881,9 +1011,14 @@ export function GlobalGraphExplorer() {
                     const labelY = node.y + size + 4;
 
                     // 文字背景
-                    ctx.fillStyle = resolvedTheme === 'dark'
-                      ? 'rgba(0,0,0,0.75)'
-                      : 'rgba(255,255,255,0.9)';
+                    if (isSearchMatched) {
+                      ctx.fillStyle = 'rgba(255, 107, 53, 0.9)'; // 🎨 橙红色背景
+                    } else {
+                      ctx.fillStyle = resolvedTheme === 'dark'
+                        ? 'rgba(0,0,0,0.75)'
+                        : 'rgba(255,255,255,0.9)';
+                    }
+
                     ctx.fillRect(
                       node.x - textWidth / 2 - padding,
                       labelY - 2,
@@ -891,11 +1026,18 @@ export function GlobalGraphExplorer() {
                       fontSize + 6,
                     );
 
-                    // 文字
-                    ctx.fillStyle = isSearchMatched
-                      ? '#f59e0b'
-                      : (resolvedTheme === 'dark' ? '#fff' : '#000');
+                    // 文字颜色
+                    if (isSearchMatched) {
+                      ctx.fillStyle = '#ffffff'; // 白色文字
+                      ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
+                      ctx.shadowBlur = 1;
+                    } else {
+                      ctx.fillStyle = resolvedTheme === 'dark' ? '#fff' : '#000';
+                      ctx.shadowBlur = 0;
+                    }
+
                     ctx.fillText(label, node.x, labelY);
+                    ctx.shadowBlur = 0; // 重置阴影
 
                     // 🔥 显示多来源标记
                     if (node.type === 'entity' && node.source_collections?.length > 1) {

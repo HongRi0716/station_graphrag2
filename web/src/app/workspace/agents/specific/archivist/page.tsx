@@ -36,6 +36,7 @@ import { useTranslations } from 'next-intl';
 import { useAppContext } from '@/components/providers/app-provider';
 import { agentAPI, ArchivistResponse, ThinkingStep } from '@/lib/api/agents';
 import { toast } from 'sonner';
+import { Markdown } from '@/components/markdown';
 
 export default function ArchivistWorkspacePage() {
   const t = useTranslations('sidebar_workspace');
@@ -221,10 +222,9 @@ export default function ArchivistWorkspacePage() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div
-                      className="prose prose-amber dark:prose-invert max-w-none"
-                      dangerouslySetInnerHTML={{ __html: result.answer }}
-                    />
+                    <div className="prose prose-amber dark:prose-invert max-w-none">
+                      <Markdown>{result.answer}</Markdown>
+                    </div>
                   </CardContent>
                 </Card>
               )}

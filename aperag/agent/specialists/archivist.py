@@ -1,5 +1,6 @@
 import logging
 from typing import Any, Dict, List, Optional
+from datetime import datetime
 
 from aperag.agent.core.base import BaseAgent
 from aperag.agent.core.models import AgentRole, AgentState
@@ -274,51 +275,220 @@ class ArchivistAgent(BaseAgent):
             return self._fallback_response(query)
     
     def _format_search_results(self, query: str, documents: List[Dict]) -> str:
-        """格式化检索结果"""
-        report = f"## 检索结果\n\n"
-        report += f"**查询**: {query}\n"
-        report += f"**找到**: {len(documents)} 条相关文档\n\n"
+        """格式化检索结果 - 优化版"""
+        # 标题和概览
+        report = f"# 📚 知识检索结果\n\n"
+        report += f"**🔍 查询内容**: {query}\n"
+        report += f"**📊 检索结果**: 共找到 **{len(documents)}** 条相关文档\n"
+        report += f"**⏰ 检索时间**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
         
-        for i, doc in enumerate(documents[:10]):
-            report += f"### {i+1}. {doc.get('title', '未知')}\n"
-            report += f"**来源**: {doc.get('source', '知识库')}\n"
+        report += "---\n\n"
+        
+        # 显示前10条结果
+        display_count = min(10, len(documents))
+        
+        for i, doc in enumerate(documents[:display_count]):
+            # 文档标题
+            title = doc.get('title', '未命名文档')
+            report += f"## 📄 {i+1}. {title}\n\n"
             
-            # 显示内容摘要
-            content = doc.get('content', '')
-            if len(content) > 300:
-                content = content[:300] + "..."
-            report += f"{content}\n\n"
+            # 元数据信息
+            metadata_items = []
+            
+            # 来源
+            source = doc.get('source', doc.get('collection_name', '知识库'))
+            metadata_items.append(f"**📁 来源**: {source}")
+            
+            # 类型
+            doc_type = doc.get('type', doc.get('category', ''))
+            if doc_type:
+                metadata_items.append(f"**🏷️ 类型**: {doc_type}")
+            
+            # 时间
+            timestamp = doc.get('timestamp', doc.get('date', doc.get('created_at', '')))
+            if timestamp:
+                metadata_items.append(f"**📅 时间**: {timestamp}")
+            
+            # 相关度分数
+            score = doc.get('score', doc.get('relevance_score', 0))
+            if score > 0:
+                score_percent = int(score * 100) if score <= 1 else int(score)
+                score_bar = "🟢" if score_percent >= 80 else "🟡" if score_percent >= 60 else "🔴"
+                metadata_items.append(f"**{score_bar} 相关度**: {score_percent}%")
+            
+            # 显示元数据
+            report += " | ".join(metadata_items) + "\n\n"
+            
+            # 内容摘要
+            content = doc.get('content', doc.get('text', ''))
+            if content:
+                # 智能截断
+                if len(content) > 300:
+                    # 尝试在句号处截断
+                    truncated = content[:300]
+                    last_period = truncated.rfind('。')
+                    if last_period > 200:  # 如果句号位置合理
+                        content = truncated[:last_period + 1]
+                    else:
+                        content = truncated + "..."
+                
+                report += f"**💡 内容摘要**:\n\n"
+                report += f"> {content}\n\n"
+            
+            # 关键词/标签
+            keywords = doc.get('keywords', doc.get('tags', []))
+            if keywords:
+                if isinstance(keywords, list):
+                    keywords_str = " ".join([f"`{kw}`" for kw in keywords[:5]])
+                else:
+                    keywords_str = f"`{keywords}`"
+                report += f"**🔖 关键词**: {keywords_str}\n\n"
+            
+            report += "---\n\n"
         
-        if len(documents) > 10:
-            report += f"*还有 {len(documents) - 10} 条结果未显示*\n"
+        # 显示更多提示
+        if len(documents) > display_count:
+            remaining = len(documents) - display_count
+            report += f"📌 *还有 **{remaining}** 条相关结果未显示*\n\n"
+        
+        # 搜索建议
+        if len(documents) == 0:
+            report += "💡 **搜索建议**:\n"
+            report += "- 尝试使用不同的关键词\n"
+            report += "- 使用更具体的设备名称或编号\n"
+            report += "- 检查拼写是否正确\n\n"
+        elif len(documents) < 3:
+            report += "💡 **提示**: 结果较少，可以尝试使用更宽泛的关键词\n\n"
         
         return report
     
     def _format_historical_results(self, query: str, documents: List[Dict]) -> str:
-        """格式化历史结果"""
-        report = f"## 历史记录\n\n"
-        report += f"**查询**: {query}\n"
-        report += f"**找到**: {len(documents)} 条历史记录\n\n"
+        """格式化历史结果 - 优化版"""
+        # 标题和概览
+        report = f"# 📜 历史记录查询结果\n\n"
+        report += f"**🔍 查询内容**: {query}\n"
+        report += f"**📊 查询结果**: 共找到 **{len(documents)}** 条历史记录\n"
+        report += f"**⏰ 查询时间**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
         
-        for i, doc in enumerate(documents[:15]):
-            report += f"### {i+1}. {doc.get('title', '未知')}\n"
-            
-            # 显示时间信息
+        report += "---\n\n"
+        
+        # 按类型分组统计
+        type_stats = {}
+        for doc in documents:
+            doc_type = doc.get('type', doc.get('category', '其他'))
+            type_stats[doc_type] = type_stats.get(doc_type, 0) + 1
+        
+        if type_stats:
+            report += "**📈 记录类型分布**:\n\n"
+            for doc_type, count in sorted(type_stats.items(), key=lambda x: x[1], reverse=True):
+                bar_length = min(20, int(count / len(documents) * 20))
+                bar = "█" * bar_length + "░" * (20 - bar_length)
+                report += f"- {doc_type}: {count} 条 {bar}\n"
+            report += "\n---\n\n"
+        
+        # 显示前15条结果（时间线视图）
+        display_count = min(15, len(documents))
+        
+        report += "## 📅 时间线视图\n\n"
+        
+        for i, doc in enumerate(documents[:display_count]):
+            # 时间戳
             timestamp = doc.get('timestamp', doc.get('date', '未知时间'))
-            report += f"**时间**: {timestamp}\n"
             
-            # 显示类型
-            doc_type = doc.get('type', doc.get('category', '未知类型'))
-            report += f"**类型**: {doc_type}\n"
+            # 文档标题和类型
+            title = doc.get('title', '未命名记录')
+            doc_type = doc.get('type', doc.get('category', '未分类'))
             
-            # 显示内容摘要
-            content = doc.get('content', '')
-            if len(content) > 200:
-                content = content[:200] + "..."
-            report += f"{content}\n\n"
+            # 类型图标
+            type_icon = {
+                '缺陷': '⚠️',
+                '检修': '🔧',
+                '巡视': '👁️',
+                '操作': '⚡',
+                '试验': '🧪',
+                '事故': '🚨',
+                '报告': '📋',
+                '记录': '📝',
+            }.get(doc_type, '📄')
+            
+            # 时间线节点
+            report += f"### {type_icon} {timestamp}\n\n"
+            report += f"**{i+1}. {title}**\n\n"
+            
+            # 元数据
+            metadata_items = []
+            metadata_items.append(f"**🏷️ 类型**: {doc_type}")
+            
+            # 设备信息
+            equipment = doc.get('equipment', doc.get('device', ''))
+            if equipment:
+                metadata_items.append(f"**🔌 设备**: {equipment}")
+            
+            # 责任人
+            responsible = doc.get('responsible', doc.get('operator', ''))
+            if responsible:
+                metadata_items.append(f"**👤 责任人**: {responsible}")
+            
+            # 状态
+            status = doc.get('status', '')
+            if status:
+                status_icon = "✅" if status in ['已完成', '正常'] else "⏳" if status in ['进行中', '待处理'] else "❌"
+                metadata_items.append(f"**{status_icon} 状态**: {status}")
+            
+            report += " | ".join(metadata_items) + "\n\n"
+            
+            # 内容摘要
+            content = doc.get('content', doc.get('description', ''))
+            if content:
+                # 智能截断
+                if len(content) > 200:
+                    truncated = content[:200]
+                    last_period = truncated.rfind('。')
+                    if last_period > 150:
+                        content = truncated[:last_period + 1]
+                    else:
+                        content = truncated + "..."
+                
+                report += f"> {content}\n\n"
+            
+            # 关键信息高亮
+            severity = doc.get('severity', doc.get('level', ''))
+            if severity:
+                severity_color = {
+                    '紧急': '🔴',
+                    '重要': '🟠',
+                    '一般': '🟡',
+                    '轻微': '🟢',
+                }.get(severity, '⚪')
+                report += f"{severity_color} **严重程度**: {severity}\n\n"
+            
+            report += "---\n\n"
         
-        if len(documents) > 15:
-            report += f"*还有 {len(documents) - 15} 条记录未显示*\n"
+        # 显示更多提示
+        if len(documents) > display_count:
+            remaining = len(documents) - display_count
+            report += f"📌 *还有 **{remaining}** 条历史记录未显示*\n\n"
+        
+        # 统计摘要
+        if len(documents) > 0:
+            report += "## 📊 统计摘要\n\n"
+            
+            # 时间范围
+            timestamps = [doc.get('timestamp', doc.get('date', '')) for doc in documents if doc.get('timestamp') or doc.get('date')]
+            if timestamps:
+                timestamps_sorted = sorted([t for t in timestamps if t])
+                if timestamps_sorted:
+                    report += f"- **时间范围**: {timestamps_sorted[0]} 至 {timestamps_sorted[-1]}\n"
+            
+            # 记录总数
+            report += f"- **记录总数**: {len(documents)} 条\n"
+            
+            # 最常见类型
+            if type_stats:
+                most_common_type = max(type_stats.items(), key=lambda x: x[1])
+                report += f"- **最常见类型**: {most_common_type[0]} ({most_common_type[1]} 条)\n"
+            
+            report += "\n"
         
         return report
     
