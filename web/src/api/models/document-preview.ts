@@ -39,6 +39,18 @@ export interface DocumentPreview {
      */
     'doc_filename'?: string;
     /**
+     * The path to the original source file for direct preview.
+     * @type {string}
+     * @memberof DocumentPreview
+     */
+    'source_object_path'?: string;
+    /**
+     * The file type/extension of the source file (e.g., pdf, docx, png).
+     * @type {string}
+     * @memberof DocumentPreview
+     */
+    'source_file_type'?: string;
+    /**
      * The path to the converted PDF object.
      * @type {string}
      * @memberof DocumentPreview

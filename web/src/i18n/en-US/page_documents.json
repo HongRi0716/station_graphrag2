@@ -24,5 +24,19 @@
   "file_type": "Type",
   "upload_progress": "Progress",
   "remove_file": "Remove",
-  "clear_files": "Clear"
+  "clear_files": "Clear",
+  "enhanced_viewer": "Enhanced Viewer",
+  "viewer_outline": "Outline",
+  "viewer_single_view": "Single View",
+  "viewer_split_view": "Split View",
+  "viewer_focus_view": "Focus Mode",
+  "viewer_search": "Search",
+  "viewer_search_placeholder": "Search content...",
+  "viewer_search_count": "{count} matches",
+  "viewer_theme_light": "Light",
+  "viewer_theme_dark": "Dark",
+  "viewer_theme_sepia": "Sepia",
+  "viewer_fullscreen": "Fullscreen",
+  "viewer_exit_fullscreen": "Exit Fullscreen",
+  "viewer_no_outline": "No outline available"
 }

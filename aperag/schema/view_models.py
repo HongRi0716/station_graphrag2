@@ -832,6 +832,12 @@ class DocumentPreview(BaseModel):
     )
     doc_filename: Optional[str] = Field(
         None, description='The name of the document.')
+    source_object_path: Optional[str] = Field(
+        None, description='The path to the original source file for direct preview.'
+    )
+    source_file_type: Optional[str] = Field(
+        None, description='The file type/extension of the source file (e.g., pdf, docx, png).'
+    )
     converted_pdf_object_path: Optional[str] = Field(
         None, description='The path to the converted PDF object.'
     )

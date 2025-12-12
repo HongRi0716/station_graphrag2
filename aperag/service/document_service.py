@@ -1028,10 +1028,22 @@ class DocumentService:
             if exists:
                 converted_pdf_object_path = converted_pdf_name
 
-            # 5. Construct and return response
+            # 5. Determine source file path and type for direct preview
+            source_object_path = None
+            source_file_type = None
+            if doc_object_path:
+                source_object_path = doc_object_path
+                # Extract file extension
+                if document.name:
+                    file_ext = document.name.rsplit('.', 1)[-1].lower() if '.' in document.name else None
+                    source_file_type = file_ext
+
+            # 6. Construct and return response
             return DocumentPreview(
                 doc_object_path=doc_object_path,
                 doc_filename=document.name,
+                source_object_path=source_object_path,
+                source_file_type=source_file_type,
                 converted_pdf_object_path=converted_pdf_object_path,
                 markdown_content=markdown_content,
                 chunks=chunks,

@@ -24,5 +24,19 @@
   "file_type": "文件类型",
   "upload_progress": "进度",
   "remove_file": "移除",
-  "clear_files": "清空"
+  "clear_files": "清空",
+  "enhanced_viewer": "增强阅览",
+  "viewer_outline": "目录大纲",
+  "viewer_single_view": "单栏视图",
+  "viewer_split_view": "分屏视图",
+  "viewer_focus_view": "专注阅读",
+  "viewer_search": "搜索",
+  "viewer_search_placeholder": "搜索内容...",
+  "viewer_search_count": "{count} 处",
+  "viewer_theme_light": "浅色",
+  "viewer_theme_dark": "深色",
+  "viewer_theme_sepia": "护眼",
+  "viewer_fullscreen": "全屏",
+  "viewer_exit_fullscreen": "退出全屏",
+  "viewer_no_outline": "暂无目录"
 }

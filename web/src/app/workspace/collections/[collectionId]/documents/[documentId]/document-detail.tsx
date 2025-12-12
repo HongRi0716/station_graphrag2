@@ -17,6 +17,12 @@ import { useEffect, useMemo, useState } from 'react';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
 
+// 增强型文档阅览器
+const DocumentViewer = dynamic(
+  () => import('@/components/document-viewer').then((mod) => mod.DocumentViewer),
+  { ssr: false }
+);
+
 const PDFDocument = dynamic(() => import('react-pdf').then((r) => r.Document), {
   ssr: false,
 });
@@ -97,6 +103,9 @@ export const DocumentDetail = ({
                     Vision-to-Text ({documentPreview.vision_chunks.length})
                   </TabsTrigger>
                 )}
+              <TabsTrigger value="enhanced" className="gap-1">
+                📖 增强阅览
+              </TabsTrigger>
             </TabsList>
           </div>
         </div>
@@ -182,6 +191,16 @@ export const DocumentDetail = ({
               </div>
             </TabsContent>
           )}
+
+        {/* 增强阅览模式 */}
+        <TabsContent value="enhanced" className="h-[calc(100vh-280px)]">
+          <DocumentViewer
+            documentPreview={documentPreview}
+            collectionId={collection.id || ''}
+            documentId={document.id || ''}
+            className="h-full"
+          />
+        </TabsContent>
       </Tabs>
     </>
   );
