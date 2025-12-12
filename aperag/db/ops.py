@@ -46,6 +46,8 @@ from aperag.db.repositories.setting import (
 from aperag.db.repositories.system import AsyncSystemRepositoryMixin
 from aperag.db.repositories.user import AsyncUserRepositoryMixin
 
+from aperag.db.repositories.agent_binding import AsyncAgentBindingRepositoryMixin
+
 logger = logging.getLogger(__name__)
 
 
@@ -79,6 +81,7 @@ class AsyncDatabaseOps(
     AsyncSettingRepositoryMixin,
     AsyncEvaluationRepositoryMixin,
     AsyncQuestionSetRepositoryMixin,
+    AsyncAgentBindingRepositoryMixin,
 ):
     pass
 

@@ -17,6 +17,16 @@ from aperag.agent.core.models import AgentRole, AgentState
 from aperag.agent.specialists.supervisor_agent import SupervisorAgent
 from aperag.db.database import get_async_session
 
+from .utils import (
+    BaseAgentRequest,
+    BaseAgentResponse,
+    extract_thinking_stream,
+    get_agent_or_raise,
+    create_agent_state,
+    setup_agent,
+    handle_agent_error,
+)
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/agents/supervisor", tags=["supervisor"])
@@ -24,21 +34,15 @@ router = APIRouter(prefix="/api/v1/agents/supervisor", tags=["supervisor"])
 
 # ========== 请求/响应模型 ==========
 
-class SupervisorRequest(BaseModel):
+class SupervisorRequest(BaseAgentRequest):
     """值班长任务请求"""
-    task: str = Field(..., description="任务描述")
-    user_id: str = Field(..., description="用户ID")
-    chat_id: Optional[str] = Field(None, description="聊天ID")
     priority: Optional[str] = Field("normal", description="优先级: urgent/high/normal")
 
 
-class SupervisorResponse(BaseModel):
+class SupervisorResponse(BaseAgentResponse):
     """值班长响应"""
-    success: bool
-    message: str
     data: Optional[Dict[str, Any]] = None
     task_analysis: Optional[Dict] = None
-    thinking_stream: Optional[List[Dict]] = None
 
 
 class StationStatusResponse(BaseModel):
@@ -54,59 +58,33 @@ async def dispatch_task(
     request: SupervisorRequest,
     session: AsyncSession = Depends(get_async_session)
 ):
-    """
-    任务分发
-    
-    值班长接收任务并智能分发给合适的专家智能体
-    
-    Args:
-        request: 任务请求
-        session: 数据库会话
-        
-    Returns:
-        任务执行结果
-    """
+    """任务分发 - 值班长接收任务并智能分发给合适的专家智能体"""
     try:
-        # 获取智能体
-        agent = agent_registry.get_agent(AgentRole.SUPERVISOR)
-        
-        if not isinstance(agent, SupervisorAgent):
-            raise HTTPException(status_code=500, detail="Agent type mismatch")
-        
-        # 设置用户信息
-        agent.user_id = request.user_id
-        agent.chat_id = request.chat_id or f"supervisor-{request.user_id}"
+        # 获取并配置智能体
+        agent = get_agent_or_raise(AgentRole.SUPERVISOR, SupervisorAgent)
+        setup_agent(agent, request.user_id, request.chat_id, "supervisor")
         
         # 创建状态
-        state = AgentState(session_id=f"supervisor-{request.user_id}")
+        state = create_agent_state("supervisor", request.user_id)
         
         # 执行任务
         result = await agent.run(state, {
             "task": request.task
         })
         
-        # 提取思维链
-        thinking_stream = [
-            {
-                "step_type": step.step_type,
-                "description": step.description,
-                "detail": step.detail,
-                "timestamp": step.timestamp.isoformat() if step.timestamp else None
-            }
-            for step in state.thinking_stream
-        ]
-        
         return SupervisorResponse(
             success=True,
             message="任务分发成功",
+            answer=result.get("answer"),
             data=result,
             task_analysis=result.get("task_analysis"),
-            thinking_stream=thinking_stream
+            thinking_stream=extract_thinking_stream(state)
         )
         
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Task dispatch failed: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        handle_agent_error("Task dispatch", e, logger)
 
 
 @router.get("/status", response_model=StationStatusResponse)
@@ -114,30 +92,14 @@ async def get_station_status(
     user_id: str,
     session: AsyncSession = Depends(get_async_session)
 ):
-    """
-    获取变电站态势
-    
-    实时获取变电站设备状态和告警信息
-    
-    Args:
-        user_id: 用户ID
-        session: 数据库会话
-        
-    Returns:
-        变电站态势信息
-    """
+    """获取变电站态势 - 实时获取变电站设备状态和告警信息"""
     try:
-        # 获取智能体
-        agent = agent_registry.get_agent(AgentRole.SUPERVISOR)
-        
-        if not isinstance(agent, SupervisorAgent):
-            raise HTTPException(status_code=500, detail="Agent type mismatch")
-        
-        # 设置用户信息
+        # 获取并配置智能体
+        agent = get_agent_or_raise(AgentRole.SUPERVISOR, SupervisorAgent)
         agent.user_id = user_id
         
         # 创建状态
-        state = AgentState(session_id=f"supervisor-status-{user_id}")
+        state = create_agent_state("supervisor-status", user_id)
         
         # 获取态势
         status = await agent.get_station_status(state)
@@ -147,18 +109,15 @@ async def get_station_status(
             status=status
         )
         
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Get station status failed: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        handle_agent_error("Get station status", e, logger)
 
 
 @router.websocket("/ws/dispatch")
 async def websocket_dispatch(websocket: WebSocket):
-    """
-    WebSocket接口 - 实时任务分发
-    
-    支持流式返回思维链和执行过程
-    """
+    """WebSocket接口 - 实时任务分发，支持流式返回思维链和执行过程"""
     await websocket.accept()
     
     try:
@@ -177,7 +136,15 @@ async def websocket_dispatch(websocket: WebSocket):
                 continue
             
             # 获取智能体
-            agent = agent_registry.get_agent(AgentRole.SUPERVISOR)
+            try:
+                agent = get_agent_or_raise(AgentRole.SUPERVISOR, SupervisorAgent)
+            except HTTPException as e:
+                await websocket.send_json({
+                    "type": "error",
+                    "message": e.detail
+                })
+                continue
+                
             agent.user_id = user_id
             agent.chat_id = f"ws-{user_id}"
             
@@ -207,6 +174,7 @@ async def websocket_dispatch(websocket: WebSocket):
                 await websocket.send_json({
                     "type": "result",
                     "data": result,
+                    "answer": result.get("answer"),
                     "task_analysis": result.get("task_analysis")
                 })
                 
@@ -239,13 +207,16 @@ async def websocket_dispatch(websocket: WebSocket):
 async def health_check():
     """健康检查"""
     try:
-        # 检查智能体是否可用
-        agent = agent_registry.get_agent(AgentRole.SUPERVISOR)
-        
+        agent = get_agent_or_raise(AgentRole.SUPERVISOR, SupervisorAgent)
         return {
             "status": "healthy",
             "agent": agent.name if agent else "not found",
             "role": AgentRole.SUPERVISOR.value
+        }
+    except HTTPException:
+        return {
+            "status": "unhealthy",
+            "error": "Agent not available"
         }
     except Exception as e:
         return {

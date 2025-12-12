@@ -1119,3 +1119,40 @@ class Setting(Base):
     gmt_created = Column(DateTime(timezone=True), default=utc_now, nullable=False)
     gmt_updated = Column(DateTime(timezone=True), default=utc_now, nullable=False)
     gmt_deleted = Column(DateTime(timezone=True), nullable=True)
+
+
+class AgentKnowledgeBindingType(str, Enum):
+    """智能体知识库绑定类型"""
+    COLLECTION = "collection"  # 绑定整个知识库集合
+    DOCUMENT = "document"      # 绑定单个文档
+
+
+class AgentKnowledgeBinding(Base):
+    """智能体知识库绑定表
+    
+    用于存储智能体与知识库/文档的绑定关系，支持：
+    - 绑定整个知识库集合 (binding_type=collection)
+    - 绑定单个文档 (binding_type=document)
+    """
+    __tablename__ = "agent_knowledge_binding"
+    __table_args__ = (
+        UniqueConstraint("agent_role", "resource_id", "gmt_deleted", name="uq_agent_knowledge_binding"),
+        Index("idx_agent_knowledge_binding_role", "agent_role"),
+        Index("idx_agent_knowledge_binding_resource", "resource_id"),
+        Index("idx_agent_knowledge_binding_type", "binding_type"),
+    )
+
+    id = Column(String(24), primary_key=True, default=lambda: "akb" + random_id())
+    agent_role = Column(String(128), nullable=False)  # 智能体角色标识 (如 archivist, operation_ticket)
+    resource_id = Column(String(24), nullable=False)  # 资源ID (collection_id 或 document_id)
+    binding_type = Column(EnumColumn(AgentKnowledgeBindingType), nullable=False, default=AgentKnowledgeBindingType.COLLECTION)
+    is_default = Column(Boolean, default=True, nullable=False)  # 是否为默认绑定
+    priority = Column(Integer, default=0, nullable=False)  # 优先级 (数值越大优先级越高)
+    
+    # 时间戳
+    gmt_created = Column(DateTime(timezone=True), default=utc_now, nullable=False)
+    gmt_updated = Column(DateTime(timezone=True), default=utc_now, nullable=False)
+    gmt_deleted = Column(DateTime(timezone=True), nullable=True)
+
+    def __repr__(self):
+        return f"<AgentKnowledgeBinding(id={self.id}, role={self.agent_role}, resource={self.resource_id}, type={self.binding_type})>"

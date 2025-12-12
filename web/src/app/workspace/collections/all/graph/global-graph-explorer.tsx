@@ -591,11 +591,12 @@ export function GlobalGraphExplorer() {
     return { nodes, links };
   }, [graphData, nodeTypeFilter]);
 
-  const nodeTypeColors = {
-    collection: '#3b82f6',
-    document: '#10b981',
-    entity: '#f59e0b',
-  };
+  // 🎨 优化：根据主题动态调整节点颜色，暗色模式使用更亮的颜色
+  const nodeTypeColors = useMemo(() => ({
+    collection: resolvedTheme === 'dark' ? '#60a5fa' : '#3b82f6',  // 暗色更亮的蓝
+    document: resolvedTheme === 'dark' ? '#34d399' : '#10b981',    // 暗色更亮的绿
+    entity: resolvedTheme === 'dark' ? '#fbbf24' : '#f59e0b',      // 暗色更亮的橙
+  }), [resolvedTheme]);
 
   return (
     <div className="flex h-[calc(100vh-4rem)] flex-col bg-background">
@@ -819,6 +820,33 @@ export function GlobalGraphExplorer() {
               </Button>
             </div>
 
+            {/* 🎯 新增：图例面板 */}
+            <div className="absolute top-4 left-4 z-10">
+              <Card className="p-3 bg-background/80 backdrop-blur">
+                <div className="text-xs font-bold mb-2">图例</div>
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: '#3b82f6' }} />
+                    <span className="text-xs text-muted-foreground">知识库</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: '#10b981' }} />
+                    <span className="text-xs text-muted-foreground">文档</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: '#f59e0b' }} />
+                    <span className="text-xs text-muted-foreground">实体</span>
+                  </div>
+                  {searchMatchedNodes.size > 0 && (
+                    <div className="flex items-center gap-2 border-t pt-1.5 mt-1.5">
+                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: '#ff6b35' }} />
+                      <span className="text-xs text-orange-600 dark:text-orange-400">搜索匹配</span>
+                    </div>
+                  )}
+                </div>
+              </Card>
+            </div>
+
             {/* Stats Overlay */}
             {showStats && (
               <div className="absolute top-4 right-4 z-10">
@@ -896,6 +924,18 @@ export function GlobalGraphExplorer() {
                   }
                   return 1;
                 }}
+                // 🎯 新增：连接线方向箭头
+                linkDirectionalArrowLength={4}
+                linkDirectionalArrowRelPos={0.85}
+                // 🎯 新增：连接线弯曲，避免重叠
+                linkCurvature={0.15}
+                // 🎯 新增：悬停时显示关系标签
+                linkLabel={(link: any) => link.label || link.type || ''}
+                // 🚀 新增：力导图布局优化参数
+                d3AlphaDecay={0.02}        // 减慢稳定速度，让布局更均匀
+                d3VelocityDecay={0.3}      // 减少节点漂移
+                warmupTicks={100}           // 预热帧数，加速初始布局
+                cooldownTime={5000}         // 冷却时间
                 backgroundColor={resolvedTheme === 'dark' ? '#020817' : '#ffffff'}
                 onNodeClick={(node) => {
                   const graphNode = node as GraphNode;

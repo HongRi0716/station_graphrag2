@@ -43,6 +43,35 @@ class ImageParser(BaseParser):
     def supported_extensions(self) -> list[str]:
         return SUPPORTED_EXTENSIONS
 
+    @staticmethod
+    def _image_to_base64(image_path: str) -> str:
+        """
+        Convert an image file to base64 encoded JPEG string.
+        
+        Args:
+            image_path: Path to the image file
+            
+        Returns:
+            Base64 encoded string of the image in JPEG format
+        """
+        with Image.open(image_path) as image:
+            # Convert RGBA/P mode to RGB for JPEG compatibility
+            if image.mode in ("RGBA", "P"):
+                # Create white background for transparent images
+                background = Image.new("RGB", image.size, (255, 255, 255))
+                if image.mode == "RGBA":
+                    background.paste(image, mask=image.split()[3])
+                else:
+                    background.paste(image)
+                image = background
+            elif image.mode != "RGB":
+                image = image.convert("RGB")
+            
+            buffered = BytesIO()
+            image.save(buffered, format="JPEG", quality=95)
+            img_byte = buffered.getvalue()
+            return base64.b64encode(img_byte).decode()
+
     def parse_file(self, path: Path, metadata: dict[str, Any] = {}, **kwargs) -> list[Part]:
         # Try SiliconFlow OCR first, fallback to PaddleOCR
         if settings.siliconflow_ocr_api_key:
@@ -74,17 +103,7 @@ class ImageParser(BaseParser):
 
     def read_image_text_siliconflow(self, path: Path) -> str:
         """Extract text from image using SiliconFlow OCR API"""
-        def image_to_base64(image_path: str) -> str:
-            with Image.open(image_path) as image:
-                if image.mode == "RGBA":
-                    image = image.convert("RGB")
-                buffered = BytesIO()
-                image.save(buffered, format="JPEG")
-                img_byte = buffered.getvalue()
-                img_base64 = base64.b64encode(img_byte)
-                return img_base64.decode()
-
-        b64_image = image_to_base64(str(path))
+        b64_image = self._image_to_base64(str(path))
         mime_type = "image/jpeg"
         data_uri = f"data:{mime_type};base64,{b64_image}"
 
@@ -135,28 +154,17 @@ class ImageParser(BaseParser):
 
     def read_image_text_paddleocr(self, path: Path) -> str:
         """Extract text from image using PaddleOCR (legacy method)"""
-        def image_to_base64(image_path: str):
-            with Image.open(image_path) as image:
-                if image.mode == "RGBA":
-                    image = image.convert("RGB")
-                buffered = BytesIO()
-                image.save(buffered, format="JPEG")
-                img_byte = buffered.getvalue()
-                img_base64 = base64.b64encode(img_byte)
-                return img_base64.decode()
+        b64_image = self._image_to_base64(str(path))
 
-        data = {"images": [image_to_base64(str(path))]}
+        data = {"images": [b64_image]}
         headers = {"Content-type": "application/json"}
         url = settings.paddleocr_host + "/predict/ocr_system"
         r = requests.post(url=url, headers=headers, data=json.dumps(data))
         r.raise_for_status()
-        data = json.loads(r.text)
+        result = json.loads(r.text)
 
         # TODO: extract image metadata by using exiftool
 
-        texts = [item["text"] for group in data["results"]
+        texts = [item["text"] for group in result["results"]
                  for item in group if "text" in item]
-        res = ""
-        for text in texts:
-            res += text
-        return res
+        return "".join(texts)

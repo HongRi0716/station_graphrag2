@@ -30,7 +30,7 @@ def convert_office_doc(input_path: Path, output_dir: Path, target_format: str) -
     if soffice_cmd is None:
         raise RuntimeError("soffice command not found")
 
-    if not input_path.exists:
+    if not input_path.exists():
         raise FileNotFoundError(f"input file {input_path} not exist")
 
     os.makedirs(output_dir, exist_ok=True)

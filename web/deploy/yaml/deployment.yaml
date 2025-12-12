@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: console
-          image: apecloud-registry.cn-zhangjiakou.cr.aliyuncs.com/apecloud/aperag-frontend:test
+          image: apecloud/aperag-frontend:test
           imagePullPolicy: Always
           ports:
             - name: http

@@ -43,6 +43,14 @@ SUPPORTED_EXTENSIONS = [
 
 class DocRayParser(BaseParser):
     name = "docray"
+    
+    # Configuration constants
+    INITIAL_POLL_INTERVAL = 2      # Initial polling interval in seconds
+    MAX_POLL_INTERVAL = 30         # Maximum polling interval in seconds
+    POLL_BACKOFF_FACTOR = 1.5      # Exponential backoff factor
+    MAX_PROCESSING_TIME = 1800     # Maximum total processing time (30 minutes)
+    HTTP_TIMEOUT = 60              # HTTP request timeout in seconds
+    SUBMIT_TIMEOUT = 120           # File submission timeout (larger files need more time)
 
     def supported_extensions(self) -> list[str]:
         return SUPPORTED_EXTENSIONS
@@ -60,29 +68,65 @@ class DocRayParser(BaseParser):
             # Submit file to doc-ray
             with open(path, "rb") as f:
                 files = {"file": (path.name, f)}
-                response = requests.post(f"{settings.docray_host}/submit", files=files)
+                response = requests.post(
+                    f"{settings.docray_host}/submit",
+                    files=files,
+                    timeout=self.SUBMIT_TIMEOUT
+                )
                 response.raise_for_status()
                 submit_response = response.json()
                 job_id = submit_response["job_id"]
                 logger.info(f"Submitted file {path.name} to DocRay, job_id: {job_id}")
 
-            # Polling the processing status
+            # Polling the processing status with exponential backoff
+            start_time = time.time()
+            poll_interval = self.INITIAL_POLL_INTERVAL
+            poll_count = 0
+            
             while True:
-                time.sleep(5)  # Poll every 5 second
-                status_response: dict = requests.get(f"{settings.docray_host}/status/{job_id}").json()
+                elapsed_time = time.time() - start_time
+                
+                # Check for timeout
+                if elapsed_time > self.MAX_PROCESSING_TIME:
+                    raise TimeoutError(
+                        f"DocRay job {job_id} exceeded maximum processing time "
+                        f"({self.MAX_PROCESSING_TIME}s). File: {path.name}"
+                    )
+                
+                time.sleep(poll_interval)
+                poll_count += 1
+                
+                try:
+                    status_response: dict = requests.get(
+                        f"{settings.docray_host}/status/{job_id}",
+                        timeout=self.HTTP_TIMEOUT
+                    ).json()
+                except requests.exceptions.Timeout:
+                    logger.warning(f"DocRay status check timed out for job {job_id}, retrying...")
+                    continue
+                
                 status = status_response["status"]
-                logger.info(f"DocRay job {job_id} status: {status}")
+                logger.info(
+                    f"DocRay job {job_id} status: {status} "
+                    f"(poll #{poll_count}, elapsed: {elapsed_time:.1f}s)"
+                )
 
                 if status == "completed":
                     break
                 elif status == "failed":
                     error_message = status_response.get("error", "Unknown error")
                     raise RuntimeError(f"DocRay parsing failed for job {job_id}: {error_message}")
-                elif status not in ["processing"]:
+                elif status not in ["processing", "pending", "queued"]:
                     raise RuntimeError(f"Unexpected DocRay job status for {job_id}: {status}")
+                
+                # Exponential backoff: increase poll interval up to max
+                poll_interval = min(poll_interval * self.POLL_BACKOFF_FACTOR, self.MAX_POLL_INTERVAL)
 
             # Get the result
-            result_response = requests.get(f"{settings.docray_host}/result/{job_id}").json()
+            result_response = requests.get(
+                f"{settings.docray_host}/result/{job_id}",
+                timeout=self.HTTP_TIMEOUT
+            ).json()
             result = result_response["result"]
             middle_json = result["middle_json"]
             images_data = result.get("images", {})
@@ -120,10 +164,18 @@ class DocRayParser(BaseParser):
                 parts.append(pdf_part)
 
             md_part = to_md_part(parts, metadata.copy())
+            
+            logger.info(
+                f"DocRay job {job_id} completed successfully. "
+                f"Parsed {len(parts)} parts in {time.time() - start_time:.1f}s"
+            )
             return [md_part] + parts
 
         except requests.exceptions.RequestException:
             logger.exception("DocRay API request failed")
+            raise
+        except TimeoutError:
+            logger.exception("DocRay processing timed out")
             raise
         except Exception:
             logger.exception("DocRay parsing failed")
@@ -132,9 +184,13 @@ class DocRayParser(BaseParser):
             # Delete the job in doc-ray to release resources
             if job_id:
                 try:
-                    requests.delete(f"{settings.docray_host}/result/{job_id}")
+                    requests.delete(
+                        f"{settings.docray_host}/result/{job_id}",
+                        timeout=self.HTTP_TIMEOUT
+                    )
                     logger.info(f"Deleted DocRay job {job_id}")
                 except requests.exceptions.RequestException as e:
                     logger.warning(f"Failed to delete DocRay job {job_id}: {e}")
             if temp_dir_obj:
                 temp_dir_obj.cleanup()
+

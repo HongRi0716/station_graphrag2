@@ -63,6 +63,10 @@ from aperag.views.preset_collections_admin import router as preset_collections_a
 from aperag.api.routes.supervisor import router as supervisor_router
 from aperag.api.routes.archivist import router as archivist_router
 from aperag.api.routes.accident_deduction import router as accident_deduction_router
+from aperag.api.routes.operation_ticket import router as operation_ticket_router
+from aperag.api.routes.power_guarantee import router as power_guarantee_router
+from aperag.api.routes.work_permit import router as work_permit_router
+from aperag.api.routes.agent_config import router as agent_config_router
 
 # Initialize MCP server integration with stateless HTTP to fix OpenAI tool call sequence issues
 mcp_app = mcp_server.http_app(path="/", stateless_http=True)
@@ -147,6 +151,10 @@ app.include_router(preset_collections_admin_router, prefix="/api/v1")  # Add pre
 app.include_router(supervisor_router)  # Already has /api/v1/agents/supervisor prefix
 app.include_router(archivist_router)  # Already has /api/v1/agents/archivist prefix
 app.include_router(accident_deduction_router)  # Already has /api/v1/agents/accident-deduction prefix
+app.include_router(operation_ticket_router)  # Already has /api/v1/agents/operation-ticket prefix
+app.include_router(power_guarantee_router)  # Already has /api/v1/agents/power-guarantee prefix
+app.include_router(work_permit_router)  # Already has /api/v1/agents/work-permit prefix
+app.include_router(agent_config_router, prefix="/api/v1/agents")  # Agent config management
 
 # Only include test router in dev mode
 if os.environ.get("DEPLOYMENT_MODE") == "dev":

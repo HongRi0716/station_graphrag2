@@ -1,5 +1,5 @@
 # Build stage
-FROM apecloud-registry.cn-zhangjiakou.cr.aliyuncs.com/apecloud/node:20.18.0-alpine AS builder
+FROM node:20.18.0-alpine AS builder
 
 WORKDIR /app
 
@@ -17,7 +17,7 @@ COPY . .
 RUN yarn build
 
 # Production stage
-FROM apecloud-registry.cn-zhangjiakou.cr.aliyuncs.com/apecloud/node:20.18.0-alpine
+FROM node:20.18.0-alpine
 
 WORKDIR /app
 

@@ -214,3 +214,22 @@ class AsyncCollectionRepositoryMixin(AsyncRepositoryProtocol):
             return result.scalars().all()
 
         return await self._execute_query(_query)
+
+    async def query_all_collections(self, limit: int = 1000):
+        """Query all non-deleted collections across all users (for agent config)"""
+
+        async def _query(session):
+            stmt = (
+                select(Collection)
+                .where(
+                    Collection.status != CollectionStatus.DELETED,
+                    Collection.type != CollectionType.CHAT,  # Exclude chat collections
+                )
+                .order_by(desc(Collection.gmt_created))
+                .limit(limit)
+            )
+            result = await session.execute(stmt)
+            return result.scalars().all()
+
+        return await self._execute_query(_query)
+

@@ -12,6 +12,9 @@ import { useTranslations } from "next-intl";
 import { useAppContext } from '@/components/providers/app-provider';
 import { agentAPI, AccidentDeductionResponse, ThinkingStep } from '@/lib/api/agents';
 import { toast } from 'sonner';
+import { Markdown } from '@/components/markdown';
+import { ExportButton } from '@/components/agents';
+
 
 export default function AccidentDeductionWorkspacePage() {
   const t = useTranslations("sidebar_workspace");
@@ -107,8 +110,23 @@ export default function AccidentDeductionWorkspacePage() {
             </div>
           </div>
 
+          {/* Loading State */}
+          {loading && (
+            <Card className="border-blue-200 bg-blue-50/30 dark:border-blue-900/30 dark:bg-blue-900/5">
+              <CardContent className="py-12">
+                <div className="flex flex-col items-center justify-center space-y-4">
+                  <Loader2 className="w-12 h-12 text-pink-600 animate-spin" />
+                  <div className="text-center">
+                    <h3 className="text-lg font-medium mb-1">正在处理任务...</h3>
+                    <p className="text-sm text-muted-foreground">智能体正在分析并生成结果，请稍候</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Results Section */}
-          {result && (
+          {result && !loading && (
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
               {/* Thinking Stream */}
               {result.thinking_stream && result.thinking_stream.length > 0 && (
@@ -144,19 +162,34 @@ export default function AccidentDeductionWorkspacePage() {
               {result.answer && (
                 <Card className="border-pink-200 bg-pink-50/30 dark:border-pink-900/30 dark:bg-pink-900/5">
                   <CardHeader>
-                    <CardTitle className="flex items-center text-lg">
-                      <AlertTriangle className="mr-2 h-5 w-5 text-pink-600" />
-                      事故预想报告
-                    </CardTitle>
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="flex items-center text-lg">
+                        <AlertTriangle className="mr-2 h-5 w-5 text-pink-600" />
+                        事故预想报告
+                      </CardTitle>
+                      <ExportButton
+                        content={{
+                          content: result.answer || '',
+                          thinkingStream: result.thinking_stream,
+                          metadata: {
+                            deduction: result.deduction
+                          }
+                        }}
+                        filename="事故预想报告"
+                        title="事故预想报告"
+                        agentName="事故预想专家"
+                        userName={user?.id}
+                        disabled={!result.answer}
+                        size="sm"
+                      />
+                    </div>
                   </CardHeader>
                   <CardContent>
-                    <div
-                      className="prose prose-pink dark:prose-invert max-w-none whitespace-pre-wrap"
-                      dangerouslySetInnerHTML={{ __html: result.answer }}
-                    />
+                    <Markdown>{result.answer}</Markdown>
                   </CardContent>
                 </Card>
               )}
+
 
               {/* Deduction Details */}
               {result.deduction && (

@@ -57,8 +57,6 @@ class AudioParser(BaseParser):
             "output": "txt",
         }
 
-        files = {"audio_file": open(str(path), "rb")}
-
         headers = {
             "Accept": "application/json",
         }
@@ -66,5 +64,16 @@ class AudioParser(BaseParser):
         # TODO: extract media metadata by using exiftool
 
         # Server: https://github.com/ahmetoner/whisper-asr-webservice
-        response = requests.post(settings.whisper_host + "/asr", params=params, files=files, headers=headers)
-        return response.text
+        # Use context manager to ensure file handle is properly closed
+        with open(str(path), "rb") as audio_file:
+            files = {"audio_file": audio_file}
+            response = requests.post(
+                settings.whisper_host + "/asr",
+                params=params,
+                files=files,
+                headers=headers,
+                timeout=300  # 5 minutes timeout for large audio files
+            )
+            response.raise_for_status()
+            return response.text
+

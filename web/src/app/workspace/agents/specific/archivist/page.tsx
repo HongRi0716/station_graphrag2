@@ -37,6 +37,7 @@ import { useAppContext } from '@/components/providers/app-provider';
 import { agentAPI, ArchivistResponse, ThinkingStep } from '@/lib/api/agents';
 import { toast } from 'sonner';
 import { Markdown } from '@/components/markdown';
+import { ExportButton } from '@/components/agents';
 
 export default function ArchivistWorkspacePage() {
   const t = useTranslations('sidebar_workspace');
@@ -216,10 +217,27 @@ export default function ArchivistWorkspacePage() {
               {result.answer && (
                 <Card className="border-amber-200 bg-amber-50/30 dark:border-amber-900/30 dark:bg-amber-900/5">
                   <CardHeader>
-                    <CardTitle className="flex items-center text-lg">
-                      <MessageSquare className="mr-2 h-5 w-5 text-amber-600" />
-                      回答
-                    </CardTitle>
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="flex items-center text-lg">
+                        <MessageSquare className="mr-2 h-5 w-5 text-amber-600" />
+                        回答
+                      </CardTitle>
+                      <ExportButton
+                        content={{
+                          content: result.answer || '',
+                          thinkingStream: result.thinking_stream,
+                          metadata: {
+                            documents: result.documents
+                          }
+                        }}
+                        filename="知识检索报告"
+                        title="知识检索报告"
+                        agentName="图谱专家"
+                        userName={user?.id}
+                        disabled={!result.answer}
+                        size="sm"
+                      />
+                    </div>
                   </CardHeader>
                   <CardContent>
                     <div className="prose prose-amber dark:prose-invert max-w-none">

@@ -3,7 +3,7 @@ VERSION ?= nightly
 VERSION_FILE ?= aperag/version/__init__.py
 BUILDX_PLATFORM ?= linux/amd64,linux/arm64
 BUILDX_ARGS ?= --sbom=false --provenance=false
-REGISTRY ?=  apecloud-registry.cn-zhangjiakou.cr.aliyuncs.com
+REGISTRY ?= docker.io
 
 # Image names
 APERAG_IMAGE = apecloud/aperag

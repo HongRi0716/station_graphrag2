@@ -1,237 +1,190 @@
 'use client';
 
-import {
-  PageContainer,
-  PageContent,
-  PageHeader,
-} from '@/components/page-container';
-import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
-import { Separator } from '@/components/ui/separator';
-import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
-import { Layers, MessageSquare, Search, Zap, Loader2 } from 'lucide-react';
+import { Zap, MessageSquare, Search, Users, Layers, FileText, Loader2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { useState } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
+import { Badge } from "@/components/ui/badge";
+import { useAppContext } from '@/components/providers/app-provider';
+import { agentAPI, SupervisorResponse } from '@/lib/api/agents';
+import { useAgentWithQuery } from '@/hooks/use-agent';
+import { Markdown } from '@/components/markdown';
+
+// 引入可复用组件
+import {
+  AgentWorkspaceLayout,
+  ThinkingStreamCard,
+  ResultCard,
+  LoadingCard,
+  TaskInputPanel,
+  QuickTaskItem,
+  QuickExample,
+  ExportButton
+} from '@/components/agents';
 
 export default function SupervisorWorkspacePage() {
   const t = useTranslations('sidebar_workspace');
-  const [task, setTask] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<string | null>(null);
+  const { user } = useAppContext();
 
-  const handleStartTask = async () => {
-    if (!task.trim()) {
-      alert('请输入任务指令');
-      return;
+  // 使用通用 Hook
+  const {
+    query,
+    setQuery,
+    loading,
+    result,
+    handleStartTask,
+    handleQuickTask
+  } = useAgentWithQuery<
+    { query: string; user_id: string },
+    SupervisorResponse
+  >(agentAPI.dispatchTask, user?.id, {
+    successMessage: '任务分发成功',
+    errorMessage: '任务执行失败，请稍后重试'
+  });
+
+
+  // 快捷任务定义
+  const quickTasks: QuickTaskItem[] = [
+    {
+      id: 'orchestration',
+      title: '任务编排 (Task Orchestration)',
+      description: '将复杂的运维任务拆解为子任务，并分发给相应的专家智能体。',
+      query: '请制定一份针对主变压器油温过高的应急处理方案，并指挥相关人员进行检查。'
+    },
+    {
+      id: 'analysis',
+      title: '综合研判 (Comprehensive Analysis)',
+      description: '汇总各方信息，提供全局视角的决策建议。',
+      query: '分析当前变电站运行状态，识别潜在风险并给出建议。'
+    },
+    {
+      id: 'sop',
+      title: 'SOP生成 (SOP Generation)',
+      description: '根据当前场景自动生成标准作业程序 (SOP)。',
+      query: '生成主变故障应急处置标准作业程序。'
     }
+  ];
 
-    setLoading(true);
-    setResult(null);
-
-    try {
-      const response = await fetch('/api/v1/agents/supervisor/dispatch', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          task: task.trim(),
-          user_id: 'current_user',
-          priority: 'normal'
-        })
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        const errorMessage =
-          (typeof errorData === 'object' && errorData !== null
-            ? errorData.message || errorData.detail
-            : undefined) || `HTTP ${response.status}`;
-        throw new Error(errorMessage);
-      }
-
-      const data = await response.json();
-
-      let resultText = `✅ 任务已成功提交\n\n`;
-      resultText += `📋 任务: ${task}\n\n`;
-
-      if (data.task_analysis) {
-        resultText += `📊 分析结果:\n`;
-        resultText += `- 任务类型: ${data.task_analysis.task_type || '未识别'}\n`;
-        resultText += `- 复杂度: ${data.task_analysis.complexity || '中等'}\n`;
-        if (data.task_analysis.required_agents) {
-          resultText += `- 需要智能体: ${data.task_analysis.required_agents.join(', ')}\n`;
-        }
-      }
-
-      if (data.data) {
-        resultText += `\n🎯 执行结果:\n`;
-        if (data.data.assigned_agent) {
-          resultText += `- 分配给: ${data.data.assigned_agent}\n`;
-        }
-        if (data.data.task_id) {
-          resultText += `- 任务ID: ${data.data.task_id}\n`;
-        }
-        if (data.data.estimated_time) {
-          resultText += `- 预计完成: ${data.data.estimated_time}\n`;
-        }
-      }
-
-      if (data.message) {
-        resultText += `\n💬 ${data.message}`;
-      }
-
-      setResult(resultText);
-    } catch (error) {
-      console.error('任务提交失败:', error);
-      const errorMessage = error instanceof Error ? error.message : '未知错误';
-      setResult(`❌ 任务提交失败\n\n错误信息: ${errorMessage}\n\n请检查:\n1. 后端服务是否正常运行\n2. 是否已登录\n3. 网络连接是否正常`);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // 快速示例
+  const quickExamples: QuickExample[] = [
+    { label: '主变油温异常应急方案', query: '请制定一份针对主变压器油温过高的应急处理方案' },
+    { label: '日常巡检任务分配', query: '安排今日变电站设备巡检任务' },
+    { label: '故障诊断协调', query: '协调诊断110kV母线接地故障原因' }
+  ];
 
   return (
-    <PageContainer>
-      <PageHeader
-        breadcrumbs={[
-          { title: t('agents'), href: '/workspace/agents' },
-          { title: '值班长 (Supervisor)' },
-        ]}
-      />
-      <PageContent>
-        <div className="space-y-6">
-          {/* Header Section */}
-          <div className="mb-8 flex items-center space-x-4">
-            <div className="rounded-full bg-yellow-500/10 p-3">
-              <Zap className="h-8 w-8 text-yellow-500" />
-            </div>
-            <div>
-              <h1 className="text-3xl font-bold tracking-tight">
-                值班长工作台 (Supervisor Dashboard)
-              </h1>
-              <p className="text-muted-foreground mt-1">
-                变电站总控大脑。负责意图识别、任务拆解、指挥其他专家协同工作。
-              </p>
-            </div>
-          </div>
+    <AgentWorkspaceLayout
+      breadcrumbs={[
+        { title: t('agents'), href: '/workspace/agents' },
+        { title: '值班长 (Supervisor)' }
+      ]}
+      title="值班长工作台 (Supervisor Dashboard)"
+      description="变电站总控大脑。负责意图识别、任务拆解、指挥其他专家协同工作。"
+      icon={Zap}
+      color="yellow"
+    >
+      {/* Loading State */}
+      {loading && (
+        <LoadingCard
+          title="值班长正在处理任务..."
+          description="正在分析任务并协调智能体，请稍候"
+          color="yellow"
+        />
+      )}
 
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-            {/* Main Task Area */}
-            <Card className="lg:col-span-2">
+      {/* Results Section */}
+      {result && !loading && (
+        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          {/* Thinking Stream */}
+          {result.thinking_stream && (
+            <ThinkingStreamCard thinkingStream={result.thinking_stream} />
+          )}
+
+          {/* Main Answer */}
+          {result.answer && (
+            <Card className="border-yellow-200 bg-yellow-50/30 dark:border-yellow-900/30 dark:bg-yellow-900/5">
               <CardHeader>
-                <CardTitle className="flex items-center space-x-2 text-lg">
-                  <Zap className="h-5 w-5 text-yellow-500" />
-                  <span>核心能力 (Core Capabilities)</span>
-                </CardTitle>
-                <CardDescription>
-                  选择一项能力开始任务，或直接在下方输入指令。
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                  <div className="hover:bg-muted/50 cursor-pointer rounded-lg border p-4 transition-colors">
-                    <h4 className="mb-1 text-sm font-medium">
-                      任务编排 (Task Orchestration)
-                    </h4>
-                    <p className="text-muted-foreground text-xs">
-                      将复杂的运维任务拆解为子任务，并分发给相应的专家智能体。
-                    </p>
-                  </div>
-                  <div className="hover:bg-muted/50 cursor-pointer rounded-lg border p-4 transition-colors">
-                    <h4 className="mb-1 text-sm font-medium">
-                      综合研判 (Comprehensive Analysis)
-                    </h4>
-                    <p className="text-muted-foreground text-xs">
-                      汇总各方信息，提供全局视角的决策建议。
-                    </p>
-                  </div>
-                  <div className="hover:bg-muted/50 cursor-pointer rounded-lg border p-4 transition-colors">
-                    <h4 className="mb-1 text-sm font-medium">
-                      SOP生成 (SOP Generation)
-                    </h4>
-                    <p className="text-muted-foreground text-xs">
-                      根据当前场景自动生成标准作业程序 (SOP)。
-                    </p>
-                  </div>
-                </div>
-                <Separator />
-                <div className="space-y-2">
-                  <h3 className="text-sm font-medium">任务指令</h3>
-                  <Textarea
-                    placeholder="例如：请制定一份针对主变压器油温过高的应急处理方案，并指挥相关人员进行检查。"
-                    rows={4}
-                    value={task}
-                    onChange={(e) => setTask(e.target.value)}
-                    disabled={loading}
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center text-lg">
+                    <FileText className="mr-2 h-5 w-5 text-yellow-500" />
+                    执行结果
+                  </CardTitle>
+                  <ExportButton
+                    content={{
+                      content: result.answer || '',
+                      thinkingStream: result.thinking_stream,
+                      metadata: {
+                        task_analysis: result.task_analysis
+                      }
+                    }}
+                    filename="任务分发报告"
+                    title="任务分发报告"
+                    agentName="值班长"
+                    userName={user?.id}
+                    disabled={!result.answer}
+                    size="sm"
                   />
                 </div>
-                <Button
-                  onClick={handleStartTask}
-                  className="w-full"
-                  disabled={loading || !task.trim()}
-                >
-                  {loading ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      处理中...
-                    </>
-                  ) : (
-                    <>
-                      <MessageSquare className="mr-2 h-4 w-4" />
-                      发送指令
-                    </>
-                  )}
-                </Button>
+              </CardHeader>
+              <CardContent>
+                <Markdown>{result.answer}</Markdown>
+              </CardContent>
+            </Card>
+          )}
 
-                {/* Result Display */}
-                {result && (
-                  <div className="mt-4 rounded-lg border bg-muted/50 p-4">
-                    <h4 className="mb-2 flex items-center gap-2 text-sm font-medium">
-                      <Badge variant="default">执行结果</Badge>
-                    </h4>
-                    <pre className="text-sm whitespace-pre-wrap">{result}</pre>
+          {/* Task Analysis */}
+          {result.task_analysis && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center">
+                  <Users className="mr-2 h-5 w-5 text-yellow-500" />
+                  任务分析
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {result.task_analysis.task_type && (
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline">任务类型</Badge>
+                    <span>{result.task_analysis.task_type}</span>
+                  </div>
+                )}
+                {result.task_analysis.priority && (
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline">优先级</Badge>
+                    <span>{result.task_analysis.priority}</span>
+                  </div>
+                )}
+                {result.task_analysis.assigned_agents && result.task_analysis.assigned_agents.length > 0 && (
+                  <div>
+                    <Badge variant="outline" className="mb-2">分配智能体</Badge>
+                    <div className="flex flex-wrap gap-2 mt-1">
+                      {result.task_analysis.assigned_agents.map((agent, idx) => (
+                        <Badge key={idx} variant="secondary">{agent}</Badge>
+                      ))}
+                    </div>
                   </div>
                 )}
               </CardContent>
             </Card>
-
-            {/* Side Panel: Quick Tools / Context */}
-            <Card className="lg:col-span-1">
-              <CardHeader>
-                <CardTitle className="flex items-center space-x-2 text-lg">
-                  <Layers className="text-primary h-5 w-5" />
-                  <span>快捷工具</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <h3 className="text-sm font-medium">上下文检索</h3>
-                  <Button variant="outline" className="w-full justify-start">
-                    <Search className="mr-2 h-4 w-4" />
-                    搜索相关文档
-                  </Button>
-                </div>
-                <Separator />
-                <div className="space-y-2">
-                  <h3 className="text-sm font-medium">历史记录</h3>
-                  <div className="text-muted-foreground py-4 text-center text-sm">
-                    暂无最近任务记录
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+          )}
         </div>
-      </PageContent>
-    </PageContainer>
+      )}
+
+      {/* Task Input Panel - Always Visible */}
+      <TaskInputPanel
+        color="yellow"
+        quickTasks={quickTasks}
+        quickExamples={quickExamples}
+        query={query}
+        onQueryChange={setQuery}
+        onSubmit={() => handleStartTask()}
+        onQuickTask={(task) => handleQuickTask(task.query)}
+        loading={loading}
+        placeholder="例如：请制定一份针对主变压器油温过高的应急处理方案，并指挥相关人员进行检查。"
+        submitText="发送指令"
+      />
+    </AgentWorkspaceLayout>
   );
 }
+

@@ -95,8 +95,8 @@ OPERATION_TICKET_AGENT_CONFIG = AgentMetadata(
     required_tools=["search_collection", "create_diagram"],
     optional_tools=["web_search"],
     
-    # 能力标签
-    capabilities={"rag", "generation", "validation"},
+    # 能力标签 - 包含角色ID供 orchestrator 查找
+    capabilities={"rag", "generation", "validation", "operation_ticket"},
     
     # 优先级
     priority=10
@@ -179,8 +179,8 @@ WORK_PERMIT_AGENT_CONFIG = AgentMetadata(
     required_tools=["search_collection"],
     optional_tools=["web_search"],
     
-    # 能力标签
-    capabilities={"rag", "generation", "risk_assessment"},
+    # 能力标签 - 包含角色ID供 orchestrator 查找
+    capabilities={"rag", "generation", "risk_assessment", "work_permit"},
     
     # 优先级
     priority=10
@@ -262,8 +262,8 @@ ACCIDENT_DEDUCTION_AGENT_CONFIG = AgentMetadata(
     required_tools=["search_collection", "create_diagram"],
     optional_tools=["web_search"],
     
-    # 能力标签
-    capabilities={"rag", "simulation", "analysis"},
+    # 能力标签 - 包含角色ID供 orchestrator 查找
+    capabilities={"rag", "simulation", "analysis", "accident_deduction"},
     
     # 优先级
     priority=8
@@ -345,8 +345,8 @@ POWER_GUARANTEE_AGENT_CONFIG = AgentMetadata(
     required_tools=["search_collection"],
     optional_tools=["web_search", "create_diagram"],
     
-    # 能力标签
-    capabilities={"rag", "planning", "risk_assessment"},
+    # 能力标签 - 包含角色ID供 orchestrator 查找
+    capabilities={"rag", "planning", "risk_assessment", "power_guarantee"},
     
     # 优先级
     priority=9

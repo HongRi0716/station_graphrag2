@@ -13,12 +13,14 @@ import {
   GraduationCap,
   Library,
   PenTool,
+  Settings,
   Shield,
   ShieldCheck,
   TrendingUp,
   Zap,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 import { PageContainer } from '@/components/page-container';
 import { Badge } from '@/components/ui/badge';
@@ -48,6 +50,7 @@ const SPECIAL_AGENT_ROUTES: Record<string, string> = {
   work_permit: '/workspace/agents/specific/work_permit',
   accident_deduction: '/workspace/agents/specific/accident_deduction',
   power_guarantee: '/workspace/agents/specific/power_guarantee',
+  guardian: '/workspace/agents/specific/guardian',
 };
 
 const SPECIALIST_AGENTS = [
@@ -183,7 +186,7 @@ const SPECIALIST_AGENTS = [
     capabilities: ['事故预想', '应急预案', '演练设计'],
   },
   {
-    id: 'power_guarantee',
+    id: 'guardian',
     title: 'The Power Guarantee Agent (保电方案专家)',
     description:
       '保电方案编制专家。制定重要活动保电方案，设备巡检计划，应急资源配置。',
@@ -209,18 +212,26 @@ export default function AgentsPage() {
     <PageContainer>
       <div className="space-y-8 p-4 pt-6 md:p-8">
         <div className="flex flex-col space-y-4">
-          <div className="flex items-center space-x-4">
-            <div className="bg-primary/10 rounded-full p-3">
-              <Bot className="text-primary h-8 w-8" />
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <div className="bg-primary/10 rounded-full p-3">
+                <Bot className="text-primary h-8 w-8" />
+              </div>
+              <div>
+                <h1 className="text-3xl font-bold tracking-tight">
+                  数字工程师团队 (Agent Workbench)
+                </h1>
+                <p className="text-muted-foreground mt-1">
+                  选择特定的垂直领域智能体来处理复杂的变电站运维任务。
+                </p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-3xl font-bold tracking-tight">
-                数字工程师团队 (Agent Workbench)
-              </h1>
-              <p className="text-muted-foreground mt-1">
-                选择特定的垂直领域智能体来处理复杂的变电站运维任务。
-              </p>
-            </div>
+            <Button variant="outline" asChild>
+              <Link href="/workspace/agents/config">
+                <Settings className="mr-2 h-4 w-4" />
+                知识库配置
+              </Link>
+            </Button>
           </div>
         </div>
 
@@ -268,14 +279,23 @@ export default function AgentsPage() {
                 </div>
               </CardContent>
 
-              <CardFooter className="pt-4">
+              <CardFooter className="pt-4 gap-2">
                 <Button
-                  className="group-hover:bg-primary group-hover:text-primary-foreground w-full shadow-sm transition-colors"
+                  className="group-hover:bg-primary group-hover:text-primary-foreground flex-1 shadow-sm transition-colors"
                   variant="outline"
                   onClick={() => startAgentSession(agent.id)}
                 >
                   <Zap className="mr-2 h-4 w-4" />
-                  激活智能体
+                  激活
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="shrink-0"
+                  onClick={() => router.push(`/workspace/agents/config?agent=${agent.id}`)}
+                  title="配置知识库"
+                >
+                  <Settings className="h-4 w-4" />
                 </Button>
               </CardFooter>
             </Card>
@@ -285,3 +305,4 @@ export default function AgentsPage() {
     </PageContainer>
   );
 }
+

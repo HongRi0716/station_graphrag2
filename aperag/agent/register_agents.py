@@ -24,6 +24,7 @@ def register_all_agents():
     from aperag.agent.specialists.accident_deduction_agent import AccidentDeductionAgent
     from aperag.agent.specialists.operation_ticket_agent import OperationTicketAgent
     from aperag.agent.specialists.work_permit_agent import WorkPermitAgent
+    from aperag.agent.specialists.power_guarantee_agent import PowerGuaranteeAgent
     
     # 注册 Supervisor
     try:
@@ -70,8 +71,18 @@ def register_all_agents():
     except Exception as e:
         logger.error(f"✗ Failed to register WorkPermit: {e}")
     
+    # 注册 PowerGuarantee
+    try:
+        power_guarantee = PowerGuaranteeAgent()
+        metadata = AGENT_CONFIGS.get(AgentRole.POWER_GUARANTEE)
+        agent_registry.register(power_guarantee, metadata)
+        logger.info(f"✓ Registered {power_guarantee.name}")
+    except Exception as e:
+        logger.error(f"✗ Failed to register PowerGuarantee: {e}")
+    
     # 统计注册结果
     registered_count = len(agent_registry.list_agents())
     logger.info(f"Agent registration complete: {registered_count} agents registered")
     
     return registered_count
+
